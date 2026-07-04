@@ -9,5 +9,7 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL,
   redisUrl: process.env.REDIS_URL,
   swiggyMcpBaseUrl: process.env.SWIGGY_MCP_BASE_URL || 'https://mcp.swiggy.example',
+  swiggyMcpFoodUrl: process.env.SWIGGY_MCP_FOOD_URL || 'https://mcp.swiggy.com/food',
+  swiggyMcpMode: process.env.SWIGGY_MCP_MODE || 'mock',
   swiggyOAuthCallback: process.env.SWIGGY_OAUTH_CALLBACK || 'https://api.humanslop.in/auth/callback',
 };

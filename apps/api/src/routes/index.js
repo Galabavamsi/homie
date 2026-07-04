@@ -47,7 +47,8 @@ export function createRouter(services) {
       const body = schema.parse(req.body);
       const data = await services.mcpService.callFoodTool(
         body.params.name,
-        body.params.arguments
+        body.params.arguments,
+        { authorization: req.headers.authorization }
       );
       res.json({
         jsonrpc: '2.0',
@@ -66,6 +67,19 @@ export function createRouter(services) {
           error: { message: error.message }
         });
       }
+      next(error);
+    }
+  });
+
+  router.post('/demo/food-agent', async (req, res, next) => {
+    try {
+      const schema = z.object({
+        query: z.string().default('pizza'),
+        confirmOrder: z.boolean().default(false)
+      });
+      const result = await services.demoAgentService.runFoodOrderDemo(schema.parse(req.body));
+      res.json(result);
+    } catch (error) {
       next(error);
     }
   });

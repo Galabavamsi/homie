@@ -23,6 +23,7 @@ docs/
   ARCHITECTURE.md
   BUILDERS_CLUB.md
   DEPLOYMENT.md
+  LOCAL_MVP.md
   SWIGGY_MCP_NOTES.md
 ```
 
@@ -58,6 +59,16 @@ Quick API checks:
 curl http://localhost:4000/api/health
 curl http://localhost:4000/api/mcp/restaurants
 ```
+
+Run the local Food agent demo:
+
+```bash
+cd apps/api
+npm run demo:food -- pizza
+npm run demo:food -- pizza --confirm
+```
+
+See [docs/LOCAL_MVP.md](docs/LOCAL_MVP.md) for the full video runbook.
 
 Swiggy Food MCP-shaped JSON-RPC mock:
 

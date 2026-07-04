@@ -2,6 +2,8 @@
 
 ## Local Demo
 
+For the fastest recording flow, use [LOCAL_MVP.md](LOCAL_MVP.md).
+
 Start the backend:
 
 ```bash

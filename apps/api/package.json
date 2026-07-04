@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "demo:food": "node scripts/demo-food-flow.js",
     "lint": "node --check src/server.js && node --check src/routes/index.js"
   },
   "dependencies": {

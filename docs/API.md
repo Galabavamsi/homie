@@ -122,6 +122,42 @@ POST /rooms/:code/join
 GET /users/me
 ```
 
+## Local Demo Agent
+
+```http
+POST /demo/food-agent
+```
+
+Dry run:
+
+```json
+{
+  "query": "pizza",
+  "confirmOrder": false
+}
+```
+
+Confirmed mock order:
+
+```json
+{
+  "query": "pizza",
+  "confirmOrder": true
+}
+```
+
+The dry run performs:
+
+```text
+get_addresses -> search_restaurants -> get_restaurant_menu -> update_food_cart -> get_food_cart
+```
+
+The confirmed run adds:
+
+```text
+place_food_order -> track_food_order
+```
+
 ### POST /rooms
 
 ```json
