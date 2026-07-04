@@ -71,7 +71,48 @@ Checkout
 Order tracking
 ```
 
-## 4. Mock vs Live MCP Mode
+## 4. Working Local Screenshots
+
+Fresh local proof screenshots are saved under:
+
+```text
+docs/screenshots/local-working/
+```
+
+They show:
+
+```text
+01-login.png
+02-home.png
+03-room.png
+04-checkout.png
+05-tracking.png
+```
+
+These were captured from:
+
+```text
+http://127.0.0.1:5100
+```
+
+The API proof command used during validation:
+
+```powershell
+$health = Invoke-RestMethod http://localhost:4000/api/health
+$demo = Invoke-RestMethod -Uri http://localhost:4000/api/demo/food-agent -Method Post -ContentType 'application/json' -Body '{"query":"pizza","confirmOrder":true}'
+```
+
+Expected API proof:
+
+```text
+Health: true
+Demo status: placed
+Restaurant: Pizza Ritual
+Total: 810
+Steps: get_addresses -> search_restaurants -> get_restaurant_menu -> update_food_cart -> get_food_cart -> place_food_order -> track_food_order
+```
+
+## 5. Mock vs Live MCP Mode
 
 Default local mode is mock:
 
@@ -95,7 +136,7 @@ POST http://localhost:4000/api/mcp/food
 
 You can also pass an `Authorization: Bearer <token>` header to that endpoint.
 
-## 5. Builders Club Guardrails Reflected Locally
+## 6. Builders Club Guardrails Reflected Locally
 
 - OAuth is modeled as OAuth 2.1 with PKCE.
 - Production redirect URI remains `https://api.humanslop.in/auth/callback`.

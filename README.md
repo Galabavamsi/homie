@@ -96,6 +96,18 @@ curl -X POST http://localhost:4000/api/mcp/food \
 | --- |
 | ![Homie mobile room](docs/screenshots/07-mobile-room.png) |
 
+## Fresh Local Working Proof
+
+Captured from `http://127.0.0.1:5100` with the local API running on `http://localhost:4000`.
+
+| Local Login | Local Room |
+| --- | --- |
+| ![Local Homie login](docs/screenshots/local-working/01-login.png) | ![Local Homie room](docs/screenshots/local-working/03-room.png) |
+
+| Local Checkout | Local Tracking |
+| --- | --- |
+| ![Local Homie checkout](docs/screenshots/local-working/04-checkout.png) | ![Local Homie tracking](docs/screenshots/local-working/05-tracking.png) |
+
 ## MVP Features
 
 - Splash, Swiggy OAuth placeholder login, home, create room, invite, room, checkout, tracking
