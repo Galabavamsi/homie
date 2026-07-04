@@ -13,6 +13,7 @@ export const mcpService = new McpService({
 });
 
 export const services = {
+  mcpService,
   restaurantService: new RestaurantService(mcpService),
   menuService: new MenuService(mcpService),
   cartService: new CartService(mcpService),

@@ -1,0 +1,62 @@
+[
+    {
+        "name":  "llms.txt",
+        "url":  "https://mcp.swiggy.com/builders/llms.txt",
+        "status":  "ok"
+    },
+    {
+        "name":  "overview.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/start/overview.md",
+        "status":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "name":  "authenticate.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/start/authenticate.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "food-mcp-overview.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/build/food/overview.md",
+        "status":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "name":  "food-tools.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/build/food/tools.md",
+        "status":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "name":  "order-food-recipe.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/build/recipes/order-food.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "multi-turn-state.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/build/agent-patterns/multi-turn-state.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "ship-to-production.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/build/ship-to-production.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "production-access.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/operate/access.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "rate-limits.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/operate/rate-limits.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "data-and-compliance.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/operate/data-and-compliance.md",
+        "status":  "ok"
+    },
+    {
+        "name":  "faq.md",
+        "url":  "https://mcp.swiggy.com/builders/docs/reference/faq.md",
+        "status":  "The remote server returned an error: (404) Not Found."
+    }
+]

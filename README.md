@@ -22,6 +22,8 @@ docs/
   API.md
   ARCHITECTURE.md
   BUILDERS_CLUB.md
+  DEPLOYMENT.md
+  SWIGGY_MCP_NOTES.md
 ```
 
 ## Run the Mobile App
@@ -55,6 +57,14 @@ Quick API checks:
 ```bash
 curl http://localhost:4000/api/health
 curl http://localhost:4000/api/mcp/restaurants
+```
+
+Swiggy Food MCP-shaped JSON-RPC mock:
+
+```bash
+curl -X POST http://localhost:4000/api/mcp/food \
+  -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"search_restaurants\",\"arguments\":{\"addressId\":\"addr_home_001\",\"query\":\"pizza\"}},\"id\":1}"
 ```
 
 ## Screenshots
@@ -112,3 +122,19 @@ Homie stores collaboration data only:
 - Activity feed
 
 Swiggy remains the source of truth for restaurant discovery, menus, pricing, cart validation, checkout, payments, delivery, and order tracking.
+
+## Swiggy Docs Alignment
+
+The project has been aligned with Swiggy Builders Club docs scraped from `https://mcp.swiggy.com/builders/docs/`.
+
+Important v1 constraints reflected in the backend/docs:
+
+- OAuth 2.1 with PKCE.
+- Redirect URIs must be HTTPS exact matches, except localhost for local development.
+- Food MCP uses JSON-RPC `tools/call` against the Food server.
+- Canonical Food tools include `get_addresses`, `search_restaurants`, `get_restaurant_menu`, `update_food_cart`, `get_food_cart`, `place_food_order`, and `track_food_order`.
+- Builders Club Food order placement is beta-limited: cart total must stay below `₹1000`.
+- Order placement is non-idempotent, so Homie must never blindly retry `place_food_order`.
+- Homie must show user-visible cart confirmation before calling `place_food_order`.
+
+See [docs/SWIGGY_MCP_NOTES.md](docs/SWIGGY_MCP_NOTES.md) for the implementation notes.

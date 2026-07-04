@@ -28,12 +28,65 @@ https://api.humanslop.in/auth/callback
 ## Mock Swiggy MCP Routes
 
 ```http
+POST /mcp/food
 GET /mcp/restaurants?q=pizza&tag=veg
 GET /mcp/menu/:restaurantId
 POST /mcp/cart
 POST /mcp/checkout
 GET /mcp/orders/:orderId
 ```
+
+### POST /mcp/food
+
+This route mocks the real Swiggy Food MCP JSON-RPC `tools/call` shape.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "search_restaurants",
+    "arguments": {
+      "addressId": "addr_home_001",
+      "query": "pizza"
+    }
+  },
+  "id": 1
+}
+```
+
+Supported mock Food tools:
+
+```text
+get_addresses
+search_restaurants
+get_restaurant_menu
+search_menu
+update_food_cart
+get_food_cart
+fetch_food_coupons
+apply_food_coupon
+flush_food_cart
+place_food_order
+get_food_orders
+track_food_order
+```
+
+The real Swiggy endpoint is modeled as:
+
+```text
+POST https://mcp.swiggy.com/food
+Authorization: Bearer <SWIGGY_TOKEN>
+Content-Type: application/json
+```
+
+Production order placement rules from the Swiggy docs:
+
+- Call `get_food_cart` first.
+- Show cart items, total, available payment methods, and delivery address.
+- Wait for explicit user confirmation.
+- Keep beta Food orders below `₹1000`.
+- Do not blindly retry `place_food_order`; check existing orders first after network/5xx uncertainty.
 
 ### POST /mcp/cart
 

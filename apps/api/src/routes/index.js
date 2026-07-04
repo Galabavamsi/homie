@@ -33,6 +33,43 @@ export function createRouter(services) {
     }
   });
 
+  router.post('/mcp/food', async (req, res, next) => {
+    try {
+      const schema = z.object({
+        jsonrpc: z.literal('2.0').default('2.0'),
+        method: z.literal('tools/call'),
+        params: z.object({
+          name: z.string(),
+          arguments: z.record(z.any()).default({})
+        }),
+        id: z.union([z.string(), z.number()]).optional()
+      });
+      const body = schema.parse(req.body);
+      const data = await services.mcpService.callFoodTool(
+        body.params.name,
+        body.params.arguments
+      );
+      res.json({
+        jsonrpc: '2.0',
+        id: body.id ?? null,
+        result: {
+          success: true,
+          data,
+          message: `Mock ${body.params.name} response from Homie MCP adapter`
+        }
+      });
+    } catch (error) {
+      if (error.status === 400) {
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          id: req.body?.id ?? null,
+          error: { message: error.message }
+        });
+      }
+      next(error);
+    }
+  });
+
   router.get('/mcp/menu/:restaurantId', async (req, res, next) => {
     try {
       const menu = await services.menuService.getRestaurantMenu(req.params.restaurantId);

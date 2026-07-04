@@ -52,4 +52,93 @@ export class McpService {
       ]
     };
   }
+
+  async callFoodTool(name, args = {}) {
+    switch (name) {
+      case 'get_addresses':
+        return {
+          addresses: [
+            {
+              id: 'addr_home_001',
+              label: 'Home',
+              displayText: 'HSR Layout, Bengaluru',
+              city: 'Bengaluru'
+            }
+          ]
+        };
+      case 'search_restaurants':
+        return {
+          restaurants: await this.getRestaurants({
+            query: args.query || 'popular',
+            tag: args.tag
+          }),
+          nextOffset: null
+        };
+      case 'get_restaurant_menu':
+        return {
+          restaurantId: args.restaurantId,
+          items: await this.getMenu(args.restaurantId)
+        };
+      case 'search_menu': {
+        const allItems = Object.values(menus).flat();
+        const query = String(args.query || '').toLowerCase();
+        return {
+          items: allItems.filter((item) =>
+            `${item.name} ${item.description}`.toLowerCase().includes(query)
+          )
+        };
+      }
+      case 'update_food_cart':
+        return {
+          restaurantId: args.restaurantId,
+          items: args.items || [],
+          message: 'Mock Swiggy food cart updated'
+        };
+      case 'get_food_cart':
+        return {
+          restaurantId: args.restaurantId || 'r0',
+          items: args.items || [],
+          total: 810,
+          currency: 'INR',
+          availablePaymentMethods: ['COD'],
+          cap: 1000
+        };
+      case 'fetch_food_coupons':
+        return {
+          coupons: [
+            { code: 'HOMIE20', description: '20% off mock Swiggy coupon', requiresOnlinePayment: false }
+          ]
+        };
+      case 'apply_food_coupon':
+        return {
+          code: args.code,
+          message: 'Mock coupon applied to Swiggy food cart'
+        };
+      case 'flush_food_cart':
+        return {
+          items: [],
+          message: 'Mock Swiggy food cart cleared'
+        };
+      case 'place_food_order':
+        return {
+          orderId: `swiggy_mock_order_${Math.floor(Math.random() * 9000 + 1000)}`,
+          paymentMethod: args.paymentMethod || 'COD',
+          message: 'Swiggy order placed successfully'
+        };
+      case 'get_food_orders':
+        return {
+          orders: [
+            {
+              orderId: 'swiggy_mock_order_8842',
+              status: 'on_the_way',
+              placedAt: new Date().toISOString()
+            }
+          ]
+        };
+      case 'track_food_order':
+        return this.getOrder(args.orderId || 'swiggy_mock_order_8842');
+      default:
+        throw Object.assign(new Error(`Unsupported Food MCP tool: ${name}`), { status: 400 });
+    }
+  }
 }
