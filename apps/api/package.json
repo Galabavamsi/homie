@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "demo:food": "node scripts/demo-food-flow.js",
-    "lint": "node --check src/server.js && node --check src/routes/index.js"
+    "record:demo": "node scripts/record-ui-demo.js",
+    "lint": "node --check src/server.js && node --check src/routes/index.js && node --check scripts/record-ui-demo.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -22,6 +23,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "playwright": "^1.62.1"
   }
 }

@@ -4,6 +4,14 @@ Homie is a collaborative food-ordering MVP built on top of a mocked Swiggy MCP l
 
 It does not replace Swiggy. Homie provides the collaboration experience around group ordering: rooms, invite links, QR codes, chat, restaurant voting, shared carts, bill splitting, AI suggestions, checkout handoff, and shared order tracking.
 
+## Builders Club Demo
+
+[Watch or download the 50-second Homie walkthrough](docs/demo/homie-builders-club-demo.mp4).
+
+[![Homie Builders Club demo](docs/demo/homie-builders-club-demo-cover.png)](docs/demo/homie-builders-club-demo.mp4)
+
+The demo covers room creation, QR invites, presence, Swiggy restaurant discovery, live voting, participant-owned cart items, a ₹998 automatic split, explicit checkout confirmation, and shared delivery tracking. The ready-to-send email, technical questions, narration, and recording command are in [docs/DEMO_SUBMISSION.md](docs/DEMO_SUBMISSION.md).
+
 ## Stack
 
 - Flutter, Material 3, Riverpod, GoRouter

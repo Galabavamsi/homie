@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../state/homie_controller.dart';
 import '../widgets/homie_widgets.dart';
 
+const _foodBetaCartLimit = 1000;
+
 class CheckoutScreen extends ConsumerWidget {
   const CheckoutScreen({super.key});
 
@@ -12,6 +14,7 @@ class CheckoutScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(homieControllerProvider);
     final controller = ref.read(homieControllerProvider.notifier);
+    final isWithinBetaCap = state.grandTotal < _foodBetaCartLimit;
     return GradientScaffold(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -23,7 +26,10 @@ class CheckoutScreen extends ConsumerWidget {
           ),
           Text(
             'Checkout',
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(context)
+                .textTheme
+                .headlineLarge
+                ?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 16),
           GlassPanel(
@@ -35,19 +41,22 @@ class CheckoutScreen extends ConsumerWidget {
                 _CheckoutTile(
                   icon: Icons.restaurant_rounded,
                   title: state.selectedRestaurant.name,
-                  subtitle: 'Restaurant, menu, prices, checkout, payment, and delivery remain Swiggy-owned.',
+                  subtitle:
+                      'Restaurant, menu, prices, checkout, payment, and delivery remain Swiggy-owned.',
                 ),
                 const Divider(),
                 _CheckoutTile(
                   icon: Icons.receipt_long_rounded,
                   title: money.format(state.grandTotal),
-                  subtitle: '${state.cart.length} cart lines - automatic owner split included',
+                  subtitle:
+                      '${state.cart.length} cart lines - automatic owner split included',
                 ),
                 const Divider(),
                 const _CheckoutTile(
                   icon: Icons.payments_rounded,
                   title: 'COD beta flow',
-                  subtitle: 'Local MVP follows Swiggy Builders Club Food constraints: COD-capable cart, explicit confirmation, and total below ₹1000.',
+                  subtitle:
+                      'Local MVP follows Swiggy Builders Club Food constraints: COD-capable cart, explicit confirmation, and total below ₹1000.',
                 ),
                 const Divider(),
                 _CapMeter(total: state.grandTotal),
@@ -59,12 +68,16 @@ class CheckoutScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
-                  onPressed: () async {
-                    await controller.checkout();
-                    if (context.mounted) context.go('/tracking');
-                  },
+                  onPressed: isWithinBetaCap
+                      ? () async {
+                          await controller.checkout();
+                          if (context.mounted) context.go('/tracking');
+                        }
+                      : null,
                   icon: const Icon(Icons.local_shipping_rounded),
-                  label: const Text('Confirm mock COD order'),
+                  label: Text(isWithinBetaCap
+                      ? 'Confirm mock COD order'
+                      : 'Cart must be below ₹1,000'),
                 ),
               ],
             ),
@@ -82,8 +95,12 @@ class _CapMeter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = (total / 1000).clamp(0.0, 1.0);
-    final remaining = (1000 - total).clamp(0, 1000);
+    final progress = (total / _foodBetaCartLimit).clamp(0.0, 1.0);
+    final remaining = (_foodBetaCartLimit - total).clamp(0, _foodBetaCartLimit);
+    final isWithinBetaCap = total < _foodBetaCartLimit;
+    final statusColor = isWithinBetaCap
+        ? const Color(0xFFFF6D21)
+        : Theme.of(context).colorScheme.error;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -91,12 +108,15 @@ class _CapMeter extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.rule_rounded, color: Color(0xFFFF6D21)),
+              Icon(Icons.rule_rounded, color: statusColor),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Builders Club beta cap',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               Text(money.format(total)),
@@ -105,11 +125,19 @@ class _CapMeter extends StatelessWidget {
           const SizedBox(height: 10),
           LinearProgressIndicator(
             value: progress,
+            color: statusColor,
             minHeight: 9,
             borderRadius: BorderRadius.circular(999),
           ),
           const SizedBox(height: 8),
-          Text('${money.format(remaining)} remaining before the ₹1000 local test cap.'),
+          Text(
+            isWithinBetaCap
+                ? '${money.format(remaining)} remaining before the ₹1,000 local test cap.'
+                : '${money.format(total - (_foodBetaCartLimit - 1))} over the allowed demo cart. Remove an item to continue.',
+            style: TextStyle(
+                color: isWithinBetaCap ? null : statusColor,
+                fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );
@@ -117,7 +145,8 @@ class _CapMeter extends StatelessWidget {
 }
 
 class _CheckoutTile extends StatelessWidget {
-  const _CheckoutTile({required this.icon, required this.title, required this.subtitle});
+  const _CheckoutTile(
+      {required this.icon, required this.title, required this.subtitle});
 
   final IconData icon;
   final String title;
