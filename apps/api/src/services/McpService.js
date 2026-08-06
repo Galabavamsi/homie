@@ -9,6 +9,14 @@ export class McpService {
   }
 
   async getRestaurants({ query, tag }) {
+    if (this.mode === 'live') {
+      const addressId = this.#liveAddressId();
+      const result = await this.callLiveFoodTool('search_restaurants', {
+        addressId,
+        query: [query, tag].filter(Boolean).join(' ') || 'popular restaurants'
+      });
+      return result.restaurants || result.data?.restaurants || [];
+    }
     return restaurants.filter((restaurant) => {
       const text = `${restaurant.name} ${restaurant.cuisine}`.toLowerCase();
       const matchesQuery = !query || text.includes(query.toLowerCase());
@@ -18,10 +26,29 @@ export class McpService {
   }
 
   async getMenu(restaurantId) {
+    if (this.mode === 'live') {
+      const result = await this.callLiveFoodTool('get_restaurant_menu', {
+        addressId: this.#liveAddressId(),
+        restaurantId
+      });
+      return result.items || result.data?.items || [];
+    }
     return menus[restaurantId] || [];
   }
 
   async createCart(payload) {
+    if (this.mode === 'live') {
+      if (!payload.restaurantId || !Array.isArray(payload.cartItems)) {
+        throw Object.assign(
+          new Error('Live cart sync requires restaurantId and Swiggy-shaped cartItems'),
+          { status: 501, code: 'live_cart_mapping_required' }
+        );
+      }
+      return this.callLiveFoodTool('update_food_cart', {
+        ...payload,
+        addressId: payload.addressId || this.#liveAddressId()
+      });
+    }
     return {
       swiggyCartId: `swiggy_mock_cart_${Date.now()}`,
       source: 'swiggy_mcp_mock',
@@ -30,6 +57,18 @@ export class McpService {
   }
 
   async checkout({ roomId, cart }) {
+    if (this.mode === 'live') {
+      throw Object.assign(
+        new Error(
+          'Live checkout is blocked until Homie maps Swiggy cart customizations, calls get_food_cart, and confirms a saved address'
+        ),
+        {
+          status: 501,
+          code: 'live_checkout_reconciliation_required',
+          details: { roomId, cartLines: cart.length }
+        }
+      );
+    }
     return {
       orderId: `swiggy_mock_order_${Math.floor(Math.random() * 9000 + 1000)}`,
       roomId,
@@ -41,6 +80,9 @@ export class McpService {
   }
 
   async getOrder(orderId) {
+    if (this.mode === 'live') {
+      return this.callLiveFoodTool('track_food_order', { orderId });
+    }
     return {
       orderId,
       status: 'on_the_way',
@@ -183,5 +225,16 @@ export class McpService {
       default:
         throw Object.assign(new Error(`Unsupported Food MCP tool: ${name}`), { status: 400 });
     }
+  }
+
+  #liveAddressId() {
+    const addressId = process.env.SWIGGY_ADDRESS_ID;
+    if (!addressId) {
+      throw Object.assign(
+        new Error('Live discovery requires SWIGGY_ADDRESS_ID from get_addresses'),
+        { status: 412, code: 'swiggy_address_required' }
+      );
+    }
+    return addressId;
   }
 }

@@ -1,50 +1,91 @@
+const errorPayload = (error) => ({
+  ok: false,
+  error: {
+    code: error.code || 'socket_error',
+    message: error.message || 'Realtime operation failed',
+    details: error.details
+  }
+});
+
 export function registerRoomSockets(io, services) {
-  io.on('connection', (socket) => {
-    socket.on('room:join', ({ roomCode, userId }) => {
-      const room = services.roomService.join(roomCode, userId || 'u1');
-      if (!room) {
-        socket.emit('room:error', { message: 'Room not found' });
-        return;
+  const collaboration = services.collaborationService;
+  const presence = new Map();
+
+  const publishPresence = (roomCode) => {
+    const online = presence.get(roomCode);
+    io.to(roomCode).emit('room:presence', {
+      roomCode,
+      onlineUserIds: online ? [...online.keys()] : []
+    });
+  };
+
+  const enterPresence = (roomCode, userId, socketId) => {
+    if (!presence.has(roomCode)) presence.set(roomCode, new Map());
+    const room = presence.get(roomCode);
+    if (!room.has(userId)) room.set(userId, new Set());
+    room.get(userId).add(socketId);
+  };
+
+  const leavePresence = (roomCode, userId, socketId) => {
+    const room = presence.get(roomCode);
+    const sockets = room?.get(userId);
+    sockets?.delete(socketId);
+    if (sockets?.size === 0) room.delete(userId);
+    if (room?.size === 0) presence.delete(roomCode);
+  };
+
+  const mutation = (socket, event, action) => {
+    socket.on(event, async (payload = {}, acknowledge = () => {}) => {
+      try {
+        const snapshot = await action(payload);
+        acknowledge({ ok: true, data: snapshot });
+        io.to(snapshot.room.code).emit('room:snapshot', snapshot);
+      } catch (error) {
+        acknowledge(errorPayload(error));
       }
-      socket.join(roomCode);
-      io.to(roomCode).emit('room:presence', {
-        roomCode,
-        participants: room.participants,
-        activity: `${userId || 'u1'} joined the room`
-      });
+    });
+  };
+
+  io.on('connection', (socket) => {
+    socket.on('room:join', async (payload = {}, acknowledge = () => {}) => {
+      try {
+        const roomCode = String(payload.roomCode || '').trim().toUpperCase();
+        const snapshot = await collaboration.joinRoom(
+          roomCode,
+          payload.userId,
+          payload.operationId
+        );
+        socket.join(roomCode);
+        socket.data.roomCode = roomCode;
+        socket.data.userId = payload.userId;
+        enterPresence(roomCode, payload.userId, socket.id);
+        acknowledge({ ok: true, data: snapshot });
+        io.to(roomCode).emit('room:snapshot', snapshot);
+        publishPresence(roomCode);
+      } catch (error) {
+        acknowledge(errorPayload(error));
+      }
     });
 
-    socket.on('chat:message', ({ roomCode, message, userId }) => {
-      const room = services.roomService.get(roomCode);
-      if (!room) return;
-      const payload = {
-        id: `m_${Date.now()}`,
-        userId: userId || 'u1',
-        message,
-        createdAt: new Date().toISOString()
-      };
-      room.messages.unshift(payload);
-      io.to(roomCode).emit('chat:message', payload);
+    mutation(socket, 'chat:send', (payload) =>
+      collaboration.sendMessage(payload.roomCode, payload));
+    mutation(socket, 'vote:cast', (payload) =>
+      collaboration.vote(payload.roomCode, payload));
+    mutation(socket, 'cart:set', (payload) =>
+      collaboration.setCartItem(payload.roomCode, payload));
+
+    socket.on('typing:start', ({ roomCode, userId } = {}) => {
+      socket.to(roomCode).emit('typing:changed', { userId, isTyping: true });
+    });
+    socket.on('typing:stop', ({ roomCode, userId } = {}) => {
+      socket.to(roomCode).emit('typing:changed', { userId, isTyping: false });
     });
 
-    socket.on('cart:update', async ({ roomCode, cart }) => {
-      const result = await services.cartService.sync(roomCode, cart || []);
-      if (result) io.to(roomCode).emit('cart:update', result.cart);
-    });
-
-    socket.on('restaurant:vote', ({ roomCode, restaurantId }) => {
-      const room = services.roomService.get(roomCode);
-      if (!room) return;
-      room.votes[restaurantId] = (room.votes[restaurantId] || 0) + 1;
-      io.to(roomCode).emit('restaurant:votes', room.votes);
-    });
-
-    socket.on('typing:start', ({ roomCode, userId }) => {
-      socket.to(roomCode).emit('typing:start', { userId });
-    });
-
-    socket.on('typing:stop', ({ roomCode, userId }) => {
-      socket.to(roomCode).emit('typing:stop', { userId });
+    socket.on('disconnect', () => {
+      const { roomCode, userId } = socket.data;
+      if (!roomCode || !userId) return;
+      leavePresence(roomCode, userId, socket.id);
+      publishPresence(roomCode);
     });
   });
 }

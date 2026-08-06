@@ -16,6 +16,7 @@ apps/mobile/build/
 
 # Logs
 *.log
+.homie-api.pid
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -11,6 +11,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(homieControllerProvider);
+    final controller = ref.read(homieControllerProvider.notifier);
     return GradientScaffold(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -19,53 +20,142 @@ class HomeScreen extends ConsumerWidget {
             children: [
               const Icon(Icons.local_dining_rounded, color: Color(0xFFFF6D21)),
               const SizedBox(width: 10),
-              Text('Homie', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+              Text(
+                'Homie',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w900),
+              ),
               const Spacer(),
-              ParticipantStack(participants: state.room.participants.take(3).toList()),
+              Avatar(participant: state.currentUser),
             ],
           ),
+          if (state.errorMessage != null) ...[
+            const SizedBox(height: 16),
+            StatusBanner(
+              message: state.errorMessage!,
+              isError: true,
+              onRetry: controller.initialize,
+              onDismiss: controller.dismissError,
+            ),
+          ],
           const SizedBox(height: 26),
           GlassPanel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Order together without the group chat chaos', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+                Text(
+                  'Order together without the group chat chaos',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 12),
-                const Text('Rooms combine Swiggy discovery and checkout with live chat, restaurant voting, shared carts, bill splitting, and AI recommendations.'),
+                const Text(
+                  'Create a room for realtime chat, restaurant voting, shared carts, owner splits, and coordinated checkout.',
+                ),
                 const SizedBox(height: 22),
                 FilledButton.icon(
-                  onPressed: () => context.go('/create-room'),
+                  onPressed:
+                      state.isBusy ? null : () => context.go('/create-room'),
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Create ordering room'),
                 ),
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
-                  onPressed: () => context.go('/room'),
+                  onPressed: state.isBusy
+                      ? null
+                      : () => _showJoinDialog(context, controller),
                   icon: const Icon(Icons.meeting_room_rounded),
-                  label: const Text('Join demo room HOMIE42'),
+                  label: const Text('Join with room code'),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 22),
-          const SectionHeader(title: 'Recent rooms'),
+          const SectionHeader(title: 'Local demo room'),
           const SizedBox(height: 12),
-          for (final title in ['Friday House Party', 'Office Lunch Pod', 'Hostel Room 302'])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GlassPanel(
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.history_rounded, color: Color(0xFFFF6D21)),
-                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                  subtitle: const Text('Swiggy Food • shared cart • split enabled'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => context.go('/room'),
-                ),
+          GlassPanel(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(
+                Icons.groups_rounded,
+                color: Color(0xFFFF6D21),
               ),
+              title: const Text(
+                'Friday House Party',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: const Text('HOMIE42  |  persisted collaboration data'),
+              trailing: state.isBusy
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chevron_right_rounded),
+              onTap: state.isBusy
+                  ? null
+                  : () async {
+                      if (await controller.joinRoom('HOMIE42') &&
+                          context.mounted) {
+                        context.go('/room');
+                      }
+                    },
             ),
+          ),
+          const SizedBox(height: 16),
+          StatusBanner(
+            message: state.mcpSource.endsWith('live')
+                ? 'Restaurant and menu data are coming from live Swiggy MCP.'
+                : 'Restaurant commerce uses the local Swiggy MCP stub; room collaboration is live.',
+            icon: state.mcpSource.endsWith('live')
+                ? Icons.cloud_done_rounded
+                : Icons.science_outlined,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _showJoinDialog(
+    BuildContext context,
+    HomieController controller,
+  ) async {
+    final codeController = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Join a room'),
+        content: TextField(
+          controller: codeController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          maxLength: 12,
+          decoration: const InputDecoration(
+            labelText: 'Room code',
+            hintText: 'HOMIE42',
+            prefixIcon: Icon(Icons.key_rounded),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, codeController.text),
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    codeController.dispose();
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+    if (await controller.joinRoom(code) && context.mounted) {
+      context.go('/room');
+    }
   }
 }

@@ -27,15 +27,19 @@ class _SplashScreenState extends State<SplashScreen> {
           tween: Tween(begin: .88, end: 1),
           duration: const Duration(milliseconds: 700),
           curve: Curves.easeOutBack,
-          builder: (context, value, child) => Transform.scale(scale: value, child: child),
+          builder: (context, value, child) =>
+              Transform.scale(scale: value, child: child),
           child: const GlassPanel(
             padding: EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.local_dining_rounded, size: 58, color: Color(0xFFFF6D21)),
+                Icon(Icons.local_dining_rounded,
+                    size: 58, color: Color(0xFFFF6D21)),
                 SizedBox(height: 16),
-                Text('Homie', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900)),
+                Text('Homie',
+                    style:
+                        TextStyle(fontSize: 40, fontWeight: FontWeight.w900)),
                 SizedBox(height: 8),
                 Text('Group ordering, powered by Swiggy MCP'),
               ],

@@ -1,103 +1,366 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/mock_data.dart';
-import '../../data/mcp/mock_mcp_service.dart';
+import '../../data/network/homie_api.dart';
+import '../../data/repositories/homie_repository.dart';
 import '../../domain/models/homie_models.dart';
 
-final mcpServiceProvider = Provider((ref) => MockMcpService());
+final homieRepositoryProvider = Provider<HomieRepository>((ref) {
+  final repository = HomieRepository();
+  ref.onDispose(() => unawaited(repository.dispose()));
+  return repository;
+});
 
 final homieControllerProvider =
     StateNotifierProvider<HomieController, HomieState>((ref) {
-  return HomieController(ref.watch(mcpServiceProvider));
+  final controller = HomieController(ref.watch(homieRepositoryProvider));
+  unawaited(controller.initialize());
+  return controller;
 });
 
 class HomieController extends StateNotifier<HomieState> {
-  HomieController(this._mcp)
+  HomieController(this._repository)
       : super(
           HomieState(
+            currentUser: mockParticipants.first,
             room: mockRoom,
             restaurants: mockRestaurants,
             menu: mockMenu,
             selectedRestaurantId: mockRestaurants.first.id,
-            votes: {for (final r in mockRestaurants.take(5)) r.id: 1 + int.parse(r.id.substring(1)) % 7},
+            votes: {
+              for (final restaurant in mockRestaurants.take(5))
+                restaurant.id: 1 + int.parse(restaurant.id.substring(1)) % 7,
+            },
             cart: [
-              CartItem(id: 'c1', item: mockMenu[1], owner: mockParticipants[1], quantity: 1),
-              CartItem(id: 'c2', item: mockMenu[2], owner: mockParticipants[2], quantity: 2),
+              CartItem(
+                id: 'c1',
+                item: mockMenu[1],
+                owner: mockParticipants[1],
+                quantity: 1,
+              ),
+              CartItem(
+                id: 'c2',
+                item: mockMenu[2],
+                owner: mockParticipants[2],
+                quantity: 2,
+              ),
             ],
             messages: mockMessages,
             activity: mockActivity,
             orderSteps: const [],
           ),
-        );
+        ) {
+    _subscriptions.add(_repository.snapshots.listen((json) {
+      _applySnapshot(RoomSnapshot.fromJson(json));
+    }));
+    _subscriptions.add(_repository.realtimeStatus.listen((status) {
+      if (mounted) state = state.copyWith(realtimeStatus: status);
+    }));
+    _subscriptions.add(_repository.presence.listen(_applyPresence));
+    _subscriptions.add(_repository.typing.listen(_applyTyping));
+  }
 
-  final MockMcpService _mcp;
+  final HomieRepository _repository;
+  final List<StreamSubscription<Object?>> _subscriptions = [];
+  Timer? _searchTimer;
 
-  Future<void> searchRestaurants(String query) async {
-    final restaurants = await _mcp.getRestaurants(query: query, filter: state.filter);
-    state = state.copyWith(restaurants: restaurants, search: query);
+  Future<void> initialize() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final user = await _repository.restoreUser();
+      final source = await _repository.healthSource();
+      final restaurantResult = await _repository.restaurants();
+      final restaurants = restaurantResult.restaurants;
+      final menu = restaurants.isEmpty
+          ? <MenuItem>[]
+          : await _repository.menu(restaurants.first.id);
+      if (!mounted) return;
+      state = state.copyWith(
+        currentUser: user,
+        hasSession: user != null,
+        restaurants: restaurants.isEmpty ? null : restaurants,
+        menu: menu.isEmpty ? null : menu,
+        selectedRestaurantId: restaurants.isEmpty ? null : restaurants.first.id,
+        mcpSource: source,
+        isLoading: false,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      state = state.copyWith(
+        isLoading: false,
+        realtimeStatus: RealtimeStatus.offline,
+        errorMessage: _message(error),
+      );
+    }
+  }
+
+  Future<bool> login(String name) async {
+    final cleanName = name.trim();
+    if (cleanName.length < 2) {
+      state = state.copyWith(
+          errorMessage: 'Enter at least two characters for your name');
+      return false;
+    }
+    return _run(() async {
+      final user = await _repository.createGuest(cleanName);
+      state = state.copyWith(currentUser: user, hasSession: true);
+    });
+  }
+
+  bool continueSession() {
+    if (!state.hasSession) {
+      state =
+          state.copyWith(errorMessage: 'Create a local guest session first');
+      return false;
+    }
+    return true;
+  }
+
+  Future<bool> createRoom(String name, int budget) {
+    if (name.trim().length < 2) {
+      state = state.copyWith(
+        errorMessage: 'Give the room a name with at least two characters',
+      );
+      return Future.value(false);
+    }
+    return _run(() async {
+      final snapshot = await _repository.createRoom(
+        name: name.trim(),
+        budget: budget,
+        hostUserId: state.currentUser.id,
+      );
+      _applySnapshot(snapshot);
+      await _ensureSelectedMenu();
+    });
+  }
+
+  Future<bool> joinRoom(String code) => _run(() async {
+        final snapshot = await _repository.joinRoom(code, state.currentUser.id);
+        _applySnapshot(snapshot);
+        await _ensureSelectedMenu();
+      });
+
+  Future<bool> refreshRoom() => _run(() async {
+        final snapshot = await _repository.refreshRoom(state.room.code);
+        _applySnapshot(snapshot);
+      }, showBusy: false);
+
+  void searchRestaurants(String query) {
+    state = state.copyWith(search: query, clearError: true);
+    _searchTimer?.cancel();
+    _searchTimer = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_loadRestaurants(query: query, filter: state.filter));
+    });
   }
 
   Future<void> setFilter(DietaryTag? filter) async {
-    final restaurants = await _mcp.getRestaurants(query: state.search, filter: filter);
-    state = state.copyWith(restaurants: restaurants, filter: filter, clearFilter: filter == null);
-  }
-
-  void selectRestaurant(String id) {
-    state = state.copyWith(selectedRestaurantId: id);
-  }
-
-  void vote(String restaurantId) {
-    final votes = Map<String, int>.from(state.votes);
-    votes[restaurantId] = (votes[restaurantId] ?? 0) + 1;
     state = state.copyWith(
-      votes: votes,
-      activity: [
-        ActivityEvent(id: 'a${DateTime.now().microsecondsSinceEpoch}', text: 'You voted for ${state.restaurants.firstWhere((r) => r.id == restaurantId).name}', time: DateTime.now()),
-        ...state.activity,
-      ],
-    );
+        filter: filter, clearFilter: filter == null, clearError: true);
+    await _loadRestaurants(query: state.search, filter: filter);
   }
 
-  void addToCart(MenuItem item) {
-    final existingIndex = state.cart.indexWhere((cartItem) => cartItem.item.id == item.id && cartItem.owner.id == mockParticipants.first.id);
-    final cart = [...state.cart];
-    if (existingIndex >= 0) {
-      cart[existingIndex] = cart[existingIndex].copyWith(quantity: cart[existingIndex].quantity + 1);
-    } else {
-      cart.insert(0, CartItem(id: 'c${DateTime.now().microsecondsSinceEpoch}', item: item, owner: mockParticipants.first, quantity: 1));
+  Future<void> _loadRestaurants({String? query, DietaryTag? filter}) async {
+    try {
+      final result =
+          await _repository.restaurants(query: query, filter: filter);
+      if (!mounted) return;
+      if (result.restaurants.isEmpty) {
+        state =
+            state.copyWith(errorMessage: 'No restaurants match those filters');
+        return;
+      }
+      final selectedStillVisible = result.restaurants.any(
+        (restaurant) => restaurant.id == state.selectedRestaurantId,
+      );
+      state = state.copyWith(
+        restaurants: result.restaurants,
+        selectedRestaurantId: selectedStillVisible
+            ? state.selectedRestaurantId
+            : result.restaurants.first.id,
+        mcpSource: result.source,
+        clearError: true,
+      );
+      await _ensureSelectedMenu();
+    } on Object catch (error) {
+      if (mounted) state = state.copyWith(errorMessage: _message(error));
     }
-    state = state.copyWith(
-      cart: cart,
-      activity: [
-        ActivityEvent(id: 'a${DateTime.now().microsecondsSinceEpoch}', text: 'You added ${item.name}', time: DateTime.now()),
-        ...state.activity,
-      ],
-    );
   }
 
-  void sendMessage(String text) {
-    if (text.trim().isEmpty) return;
-    state = state.copyWith(
-      messages: [
-        ChatMessage(id: 'm${DateTime.now().microsecondsSinceEpoch}', sender: mockParticipants.first, message: text.trim(), time: DateTime.now()),
-        ...state.messages,
-      ],
-    );
+  Future<void> selectRestaurant(String id) async {
+    state = state.copyWith(selectedRestaurantId: id, clearError: true);
+    await _ensureSelectedMenu();
   }
+
+  Future<void> _ensureSelectedMenu() async {
+    if (state.menu
+        .any((item) => item.restaurantId == state.selectedRestaurantId)) return;
+    try {
+      final fetched = await _repository.menu(state.selectedRestaurantId);
+      if (!mounted) return;
+      final retained = state.menu
+          .where((item) => item.restaurantId != state.selectedRestaurantId)
+          .toList();
+      state = state.copyWith(menu: [...retained, ...fetched]);
+    } on Object catch (error) {
+      if (mounted) state = state.copyWith(errorMessage: _message(error));
+    }
+  }
+
+  Future<void> vote(String restaurantId) async {
+    await _run(() async {
+      _applySnapshot(await _repository.vote(
+        code: state.room.code,
+        userId: state.currentUser.id,
+        restaurantId: restaurantId,
+      ));
+    }, showBusy: false);
+  }
+
+  Future<void> addToCart(MenuItem item) async {
+    final existing = state.cart.where(
+      (line) =>
+          line.owner.id == state.currentUser.id && line.item.id == item.id,
+    );
+    final quantity = existing.isEmpty ? 1 : existing.first.quantity + 1;
+    await setCartQuantity(item, quantity);
+  }
+
+  Future<void> setCartQuantity(MenuItem item, int quantity) async {
+    await _run(() async {
+      _applySnapshot(await _repository.setCartItem(
+        code: state.room.code,
+        userId: state.currentUser.id,
+        item: item,
+        quantity: quantity.clamp(0, 20),
+      ));
+    }, showBusy: false);
+  }
+
+  Future<void> sendMessage(String text) async {
+    final message = text.trim();
+    if (message.isEmpty) return;
+    await _run(() async {
+      _applySnapshot(await _repository.sendMessage(
+        code: state.room.code,
+        userId: state.currentUser.id,
+        message: message,
+      ));
+    }, showBusy: false);
+  }
+
+  void setTyping(bool value) => _repository.setTyping(value);
 
   void askAssistant(String prompt) {
     final lower = prompt.toLowerCase();
     final answer = lower.contains('budget')
-        ? 'Budget-safe plan: order 2 party combos, 1 veg starter, 1 non-veg main, and split desserts. Current cart leaves about ₹${(state.room.budget - state.grandTotal).clamp(0, state.room.budget)}.'
+        ? 'Budget-safe plan: order two shareable mains, one starter, and a dessert. The room has INR ${(state.room.budget - state.grandTotal).clamp(0, state.room.budget)} left.'
         : lower.contains('veg')
-            ? 'Vegetarian picks: Paneer Tikka Bowl, Rainbow Salad, Truffle Fries, and Brownie Box. They balance spicy, healthy, and sharing.'
-            : 'I would lock ${state.selectedRestaurant.name}: high rating, ${state.selectedRestaurant.etaMinutes} min ETA, and enough veg/non-veg options for the room.';
+            ? 'Vegetarian picks: Paneer Tikka Bowl, Rainbow Salad, Truffle Fries, and Brownie Box balance spicy, healthy, and sharing choices.'
+            : 'I would vote for ${state.selectedRestaurant.name}: ${state.selectedRestaurant.rating.toStringAsFixed(1)} rating, ${state.selectedRestaurant.etaMinutes} minute ETA, and a group-friendly menu.';
     state = state.copyWith(assistantText: answer);
   }
 
-  Future<void> checkout() async {
-    final orderId = await _mcp.checkout(state.room.id, state.cart);
-    final steps = await _mcp.getOrderTracking(orderId);
-    state = state.copyWith(orderSteps: steps);
+  Future<bool> checkout() => _run(() async {
+        _applySnapshot(await _repository.checkout(
+          code: state.room.code,
+          userId: state.currentUser.id,
+        ));
+      });
+
+  void dismissError() => state = state.copyWith(clearError: true);
+
+  void _applySnapshot(RoomSnapshot snapshot) {
+    if (!mounted) return;
+    final cartRestaurant =
+        snapshot.cart.isEmpty ? null : snapshot.cart.first.item.restaurantId;
+    final selected = cartRestaurant ??
+        (state.restaurants.any((item) => item.id == state.selectedRestaurantId)
+            ? state.selectedRestaurantId
+            : state.restaurants.first.id);
+    state = state.copyWith(
+      room: snapshot.room,
+      votes: snapshot.votes,
+      userVotes: snapshot.userVotes,
+      cart: snapshot.cart,
+      messages: snapshot.messages,
+      activity: snapshot.activity,
+      orderSteps: snapshot.orderSteps,
+      selectedRestaurantId: selected,
+      clearError: true,
+    );
+  }
+
+  void _applyPresence(Map<String, dynamic> payload) {
+    if (!mounted) return;
+    final online = (payload['onlineUserIds'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toSet();
+    Participant apply(Participant participant) => participant.copyWith(
+          isOnline: online.contains(participant.id),
+        );
+    state = state.copyWith(
+      room: state.room.copyWith(
+        participants: state.room.participants.map(apply).toList(),
+      ),
+      cart: state.cart
+          .map((line) => line.copyWith(owner: apply(line.owner)))
+          .toList(),
+      messages: state.messages
+          .map((message) => message.copyWith(sender: apply(message.sender)))
+          .toList(),
+    );
+  }
+
+  void _applyTyping(Map<String, dynamic> payload) {
+    if (!mounted) return;
+    final userId = payload['userId']?.toString();
+    final isTyping = payload['isTyping'] as bool? ?? false;
+    state = state.copyWith(
+      room: state.room.copyWith(
+        participants: state.room.participants
+            .map((participant) => participant.id == userId
+                ? participant.copyWith(isTyping: isTyping)
+                : participant)
+            .toList(),
+      ),
+    );
+  }
+
+  Future<bool> _run(
+    Future<void> Function() action, {
+    bool showBusy = true,
+  }) async {
+    if (showBusy) state = state.copyWith(isBusy: true, clearError: true);
+    try {
+      await action();
+      if (mounted && showBusy) state = state.copyWith(isBusy: false);
+      return true;
+    } on Object catch (error) {
+      if (mounted) {
+        state = state.copyWith(
+          isBusy: false,
+          errorMessage: _message(error),
+          realtimeStatus: error is ApiException && error.code == 'offline'
+              ? RealtimeStatus.offline
+              : null,
+        );
+      }
+      return false;
+    }
+  }
+
+  String _message(Object error) => error is ApiException
+      ? error.message
+      : 'Something went wrong. Please try again.';
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    for (final subscription in _subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    super.dispose();
   }
 }

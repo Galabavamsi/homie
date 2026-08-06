@@ -1,44 +1,100 @@
-# API Documentation
+# API
 
-Base URL in local development:
+Local base URL:
 
 ```text
-http://localhost:4000/api
+http://127.0.0.1:4000/api
 ```
 
-## Health
+Errors use one envelope:
+
+```json
+{
+  "error": {
+    "code": "mixed_restaurant_cart",
+    "message": "A shared room can checkout from one restaurant at a time."
+  }
+}
+```
+
+## Service
 
 ```http
 GET /health
-```
-
-## Authentication
-
-```http
+GET /ready
 GET /auth/swiggy
 GET /auth/callback
 ```
 
-`/auth/swiggy` returns a placeholder OAuth authorization URL and the production callback URI:
+`/health` reports active persistence and MCP modes. `/ready` verifies the repository connection.
 
-```text
-https://api.humanslop.in/auth/callback
-```
-
-## Mock Swiggy MCP Routes
+## Local Identity
 
 ```http
-POST /mcp/food
-GET /mcp/restaurants?q=pizza&tag=veg
-GET /mcp/menu/:restaurantId
-POST /mcp/cart
-POST /mcp/checkout
-GET /mcp/orders/:orderId
+POST /users/guest
 ```
 
-### POST /mcp/food
+```json
+{ "name": "Vamsi" }
+```
 
-This route mocks the real Swiggy Food MCP JSON-RPC `tools/call` shape.
+## Collaboration
+
+```http
+POST /rooms
+GET  /rooms/:code
+POST /rooms/:code/join
+POST /rooms/:code/messages
+PUT  /rooms/:code/vote
+PUT  /rooms/:code/cart/items/:itemId
+POST /rooms/:code/checkout
+GET  /collaboration/orders/:orderId
+```
+
+Create a room:
+
+```json
+{
+  "name": "Friday House Party",
+  "budget": 2500,
+  "hostUserId": "user-id"
+}
+```
+
+Set a cart line. The backend retrieves the canonical item and price from `MenuService`:
+
+```json
+{
+  "userId": "user-id",
+  "restaurantId": "r0",
+  "quantity": 2,
+  "customization": "Regular",
+  "operationId": "client-generated-uuid"
+}
+```
+
+Checkout:
+
+```json
+{
+  "userId": "host-user-id",
+  "confirmed": true,
+  "operationId": "client-generated-uuid"
+}
+```
+
+Every retryable mutation accepts `operationId`. Reusing it returns the original snapshot instead of applying the mutation twice.
+
+## Swiggy Adapter
+
+```http
+GET  /mcp/restaurants?q=pizza&tag=veg
+GET  /mcp/menu/:restaurantId
+POST /mcp/food
+POST /demo/food-agent
+```
+
+`POST /mcp/food` models MCP JSON-RPC tool calls:
 
 ```json
 {
@@ -46,157 +102,39 @@ This route mocks the real Swiggy Food MCP JSON-RPC `tools/call` shape.
   "method": "tools/call",
   "params": {
     "name": "search_restaurants",
-    "arguments": {
-      "addressId": "addr_home_001",
-      "query": "pizza"
-    }
+    "arguments": { "query": "biryani" }
   },
   "id": 1
 }
 ```
 
-Supported mock Food tools:
+In `SWIGGY_MCP_MODE=live`, the adapter calls `https://mcp.swiggy.com/food` with a server-side bearer token. Local mode returns deterministic fixtures.
 
-```text
-get_addresses
-search_restaurants
-get_restaurant_menu
-search_menu
-update_food_cart
-get_food_cart
-fetch_food_coupons
-apply_food_coupon
-flush_food_cart
-place_food_order
-get_food_orders
-track_food_order
-```
+## Socket.IO
 
-The real Swiggy endpoint is modeled as:
-
-```text
-POST https://mcp.swiggy.com/food
-Authorization: Bearer <SWIGGY_TOKEN>
-Content-Type: application/json
-```
-
-Production order placement rules from the Swiggy docs:
-
-- Call `get_food_cart` first.
-- Show cart items, total, available payment methods, and delivery address.
-- Wait for explicit user confirmation.
-- Keep beta Food orders below `₹1000`.
-- Do not blindly retry `place_food_order`; check existing orders first after network/5xx uncertainty.
-
-### POST /mcp/cart
-
-```json
-{
-  "roomCode": "HOMIE42",
-  "cart": [
-    {
-      "menuItemId": "r0_m1",
-      "ownerUserId": "u2",
-      "quantity": 1,
-      "customization": "Regular"
-    }
-  ]
-}
-```
-
-### POST /mcp/checkout
-
-```json
-{
-  "roomId": "room_1",
-  "cart": []
-}
-```
-
-## Room Routes
-
-```http
-POST /rooms
-GET /rooms/:code
-POST /rooms/:code/join
-GET /users/me
-```
-
-## Local Demo Agent
-
-```http
-POST /demo/food-agent
-```
-
-Dry run:
-
-```json
-{
-  "query": "pizza",
-  "confirmOrder": false
-}
-```
-
-Confirmed mock order:
-
-```json
-{
-  "query": "pizza",
-  "confirmOrder": true
-}
-```
-
-The dry run performs:
-
-```text
-get_addresses -> search_restaurants -> get_restaurant_menu -> update_food_cart -> get_food_cart
-```
-
-The confirmed run adds:
-
-```text
-place_food_order -> track_food_order
-```
-
-### POST /rooms
-
-```json
-{
-  "name": "Friday House Party",
-  "budget": 2500
-}
-```
-
-## Socket.io Events
-
-Client emits:
+Client mutations:
 
 ```text
 room:join
-chat:message
-cart:update
-restaurant:vote
+chat:send
+vote:cast
+cart:set
 typing:start
 typing:stop
 ```
 
-Server emits:
+Server events:
 
 ```text
+room:snapshot
 room:presence
-room:error
-chat:message
-cart:update
-restaurant:votes
-typing:start
-typing:stop
+typing:changed
 ```
 
-Example join payload:
+Mutation acknowledgement:
 
 ```json
-{
-  "roomCode": "HOMIE42",
-  "userId": "u1"
-}
+{ "ok": true, "data": { "room": {}, "messages": [], "votes": {}, "cart": [] } }
 ```
+
+Failures use `{ "ok": false, "error": { "code": "...", "message": "..." } }`. After each successful mutation, the server broadcasts a complete versioned room snapshot, avoiding client-side merge conflicts.

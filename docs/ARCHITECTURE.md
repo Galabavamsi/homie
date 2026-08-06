@@ -1,66 +1,65 @@
 # Architecture
 
 ```mermaid
-flowchart TD
-  A["Flutter App\nMaterial 3 + Riverpod + GoRouter"] --> B["Homie API\nExpress REST"]
-  A --> C["Realtime Channel\nSocket.io"]
-  B --> D["Room Service\nCollaboration data"]
-  B --> E["Restaurant/Menu/Cart/Order/User Services"]
+flowchart LR
+  A["Flutter Android\nRiverpod + GoRouter"] -->|"REST with operationId"| B["Express API"]
+  A <-->|"Socket.IO acknowledgements\nand snapshots"| C["Realtime gateway"]
+  B --> D["CollaborationService"]
   C --> D
-  D --> F["PostgreSQL\nrooms, participants, messages, votes"]
-  C --> G["Redis\npresence, pub/sub, ephemeral sync"]
-  E --> H["McpService boundary"]
-  H --> I["Swiggy Food MCP\nJSON-RPC tools/call"]
-  I --> J["Tools\nget_addresses, search_restaurants,\nget_restaurant_menu, update_food_cart,\nget_food_cart, place_food_order,\ntrack_food_order"]
+  D --> E["Repository interface"]
+  E --> F["PostgreSQL\ndurable room state"]
+  C --> G["Redis adapter\ncross-instance pub/sub"]
+  D --> H["McpService"]
+  H -->|"mock mode"| I["Deterministic Food fixture"]
+  H -->|"live mode + OAuth token"| J["Swiggy Food MCP\nJSON-RPC tools/call"]
 ```
 
-## Frontend Layers
+## Flutter Layers
 
 ```text
-lib/
-  core/                 theme and mock data
-  domain/
-    models/             room, participant, restaurant, menu, cart, order
-    services/           service contracts for MCP-facing features
-  data/
-    mcp/                mock MCP implementation
-    repositories/       reserved for remote/local repository implementations
-  presentation/
-    app.dart            router and app shell
-    state/              Riverpod controller
-    screens/            splash, login, home, room, checkout, tracking
-    widgets/            glass panels, avatars, chips, price helpers
+lib/core/                 theme, API environment, startup fixture
+lib/domain/models/        collaboration and commerce models
+lib/data/network/         HTTP client and Socket.IO client
+lib/data/repositories/    remote repository and identity persistence
+lib/presentation/state/   Riverpod orchestration and snapshot reconciliation
+lib/presentation/screens/ native user flows
 ```
+
+The fixture keeps the first frame usable. Once the API responds, restaurant/menu and room snapshots are server sourced. Android defaults to `10.0.2.2`; other targets can override `API_BASE_URL` with `--dart-define`.
 
 ## Backend Layers
 
 ```text
-src/
-  config/               env, Postgres, Redis
-  data/                 mock data
-  routes/               REST API
-  services/             use-case services and MCP adapter
-  sockets/              Socket.io room events
-  server.js             app bootstrap
+src/routes/               validation and HTTP status mapping
+src/sockets/              acknowledged events, presence, broadcasts
+src/services/             collaboration use cases and Swiggy boundary
+src/data/                 PostgreSQL and memory repositories
+src/db/migrations/        idempotent schema and local seed
+src/config/               environment, PostgreSQL, Redis adapter
 ```
 
-## Production Replacement Plan
+## Durable Model
 
-1. Keep Homie room APIs unchanged.
-2. Replace `MockMcpService` in Flutter only if direct client MCP calls become approved.
-3. Replace `apps/api/src/services/McpService.js` with authenticated server-side Swiggy MCP calls.
-4. Move `rooms` in-memory data to PostgreSQL tables.
-5. Use Redis for presence, typing state, Socket.io adapter, and rate-limit counters.
-6. Add OAuth token storage with encryption, rotation, and least-privilege scopes.
-7. Add audit logging and PII retention controls before production rollout.
-8. Add Food MCP safety guards: exact address confirmation, `₹1000` cart cap, and non-idempotent `place_food_order` check-then-retry.
+- `users`: local guest identities; replace or link after OAuth.
+- `rooms`: host, budget, lifecycle status, and monotonic version.
+- `room_participants`: membership.
+- `messages`: bounded chat history.
+- `restaurant_votes`: one current vote per participant.
+- `cart_items`: participant ownership plus canonical menu snapshot.
+- `activity_events`: user-readable audit feed.
+- `orders`: order reference and room-visible timeline.
+- `room_operations`: completed responses keyed by client operation ID.
 
-## Security Notes
+## Consistency Rules
 
-- Swiggy OAuth callback is explicitly configured as `https://api.humanslop.in/auth/callback`.
-- Swiggy OAuth uses OAuth 2.1 with PKCE; redirect URIs must be HTTPS exact matches, except localhost during local development.
-- The backend is the intended MCP caller, preventing Swiggy credentials from being shipped in the app.
-- Homie should not store payment details or sensitive transaction payloads.
-- Homie should log session/correlation ids, not raw Food MCP request/response bodies.
-- MCP access is not resold or exposed to third parties.
-- Swiggy attribution should remain visible anywhere MCP data is shown.
+- Every mutation checks membership and room state.
+- Voting again changes a participant's vote instead of inflating totals.
+- Cart data is reloaded from `MenuService`; client prices are ignored.
+- A room cart contains one restaurant and quantities are bounded to `0..20`.
+- Socket failures fall back to HTTP using the same operation ID.
+- Checkout requires an open room, host identity, explicit confirmation, a non-empty cart, and total below the local cap.
+- Successful checkout stores the order and locks the room.
+
+## Production Gaps
+
+The collaboration plane is locally functional. Live commerce still requires Swiggy-issued OAuth/DCR details, encrypted token storage, refresh/revocation handling, official attribution assets, a staging order, production observability, rate limiting, and agreed retention controls.

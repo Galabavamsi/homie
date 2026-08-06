@@ -1,24 +1,49 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
+import { env } from '../config/env.js';
+
+const operationId = z.string().min(8).max(120).optional();
+const roomCode = z.string().trim().min(4).max(12).transform((value) => value.toUpperCase());
+
 export function createRouter(services) {
   const router = Router();
+  const collaboration = services.collaborationService;
 
   router.get('/health', (_req, res) => {
-    res.json({ ok: true, service: 'homie-api', mcp: 'mocked' });
+    res.json({
+      ok: true,
+      service: 'homie-api',
+      persistence: services.repository.kind,
+      mcpMode: env.swiggyMcpMode,
+      time: new Date().toISOString()
+    });
+  });
+
+  router.get('/ready', async (_req, res, next) => {
+    try {
+      const persistence = await services.repository.readiness();
+      res.json({ ok: true, persistence });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get('/auth/swiggy', (_req, res) => {
     res.json({
       provider: 'swiggy',
-      type: 'oauth_placeholder',
-      redirectUri: 'https://api.humanslop.in/auth/callback',
-      authorizationUrl: 'https://mcp.swiggy.example/oauth/authorize'
+      type: 'oauth_2_1_pkce_pending_credentials',
+      redirectUri: env.swiggyOAuthCallback,
+      documentation: 'https://mcp.swiggy.com/builders/docs/start/authenticate/'
     });
   });
 
   router.get('/auth/callback', (req, res) => {
-    res.json({ ok: true, message: 'Swiggy OAuth callback placeholder', query: req.query });
+    res.json({
+      ok: true,
+      message: 'OAuth callback route is reachable; token exchange activates after Swiggy issues client access.',
+      hasCode: typeof req.query.code === 'string'
+    });
   });
 
   router.get('/mcp/restaurants', async (req, res, next) => {
@@ -27,7 +52,17 @@ export function createRouter(services) {
         query: req.query.q,
         tag: req.query.tag
       });
-      res.json({ data: restaurants, source: 'swiggy_mcp_mock' });
+      res.json({ data: restaurants, source: `swiggy_mcp_${env.swiggyMcpMode}` });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/mcp/menu/:restaurantId', async (req, res, next) => {
+    try {
+      const menu = await services.menuService.getRestaurantMenu(req.params.restaurantId);
+      if (menu.length === 0) return res.status(404).json({ error: { code: 'menu_not_found', message: 'Menu not found' } });
+      res.json({ data: menu, source: `swiggy_mcp_${env.swiggyMcpMode}` });
     } catch (error) {
       next(error);
     }
@@ -53,20 +88,9 @@ export function createRouter(services) {
       res.json({
         jsonrpc: '2.0',
         id: body.id ?? null,
-        result: {
-          success: true,
-          data,
-          message: `Mock ${body.params.name} response from Homie MCP adapter`
-        }
+        result: { success: true, data }
       });
     } catch (error) {
-      if (error.status === 400) {
-        return res.status(400).json({
-          jsonrpc: '2.0',
-          id: req.body?.id ?? null,
-          error: { message: error.message }
-        });
-      }
       next(error);
     }
   });
@@ -74,90 +98,127 @@ export function createRouter(services) {
   router.post('/demo/food-agent', async (req, res, next) => {
     try {
       const schema = z.object({
-        query: z.string().default('pizza'),
+        query: z.string().trim().min(1).max(100).default('pizza'),
         confirmOrder: z.boolean().default(false)
       });
-      const result = await services.demoAgentService.runFoodOrderDemo(schema.parse(req.body));
-      res.json(result);
+      res.json(await services.demoAgentService.runFoodOrderDemo(schema.parse(req.body)));
     } catch (error) {
       next(error);
     }
   });
 
-  router.get('/mcp/menu/:restaurantId', async (req, res, next) => {
+  router.post('/users/guest', async (req, res, next) => {
     try {
-      const menu = await services.menuService.getRestaurantMenu(req.params.restaurantId);
-      res.json({ data: menu, source: 'swiggy_mcp_mock' });
+      const body = z.object({ name: z.string().trim().min(2).max(40) }).parse(req.body);
+      res.status(201).json(await collaboration.createGuest(body.name));
     } catch (error) {
       next(error);
     }
-  });
-
-  router.post('/mcp/cart', async (req, res, next) => {
-    try {
-      const schema = z.object({
-        roomCode: z.string().min(3),
-        cart: z.array(z.record(z.any()))
-      });
-      const body = schema.parse(req.body);
-      const result = await services.cartService.sync(body.roomCode, body.cart);
-      if (!result) return res.status(404).json({ error: 'Room not found' });
-      res.json(result);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.post('/mcp/checkout', async (req, res, next) => {
-    try {
-      const schema = z.object({
-        roomId: z.string(),
-        cart: z.array(z.record(z.any()))
-      });
-      const body = schema.parse(req.body);
-      const order = await services.orderService.checkout(body.roomId, body.cart);
-      res.status(201).json(order);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get('/mcp/orders/:orderId', async (req, res, next) => {
-    try {
-      const order = await services.orderService.getOrder(req.params.orderId);
-      res.json(order);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.post('/rooms', (req, res, next) => {
-    try {
-      const schema = z.object({
-        name: z.string().min(2),
-        budget: z.number().int().positive().default(2500)
-      });
-      const room = services.roomService.create(schema.parse(req.body));
-      res.status(201).json(room);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get('/rooms/:code', (req, res) => {
-    const room = services.roomService.get(req.params.code);
-    if (!room) return res.status(404).json({ error: 'Room not found' });
-    res.json(room);
-  });
-
-  router.post('/rooms/:code/join', (req, res) => {
-    const room = services.roomService.join(req.params.code, req.body.userId || 'u1');
-    if (!room) return res.status(404).json({ error: 'Room or user not found' });
-    res.json(room);
   });
 
   router.get('/users/me', (_req, res) => {
     res.json(services.userService.currentUser());
+  });
+
+  router.post('/rooms', async (req, res, next) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(2).max(60),
+        budget: z.number().int().min(500).max(50000),
+        hostUserId: z.string().min(1).max(100)
+      }).parse(req.body);
+      res.status(201).json(await collaboration.createRoom(body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/rooms/:code', async (req, res, next) => {
+    try {
+      const code = roomCode.parse(req.params.code);
+      res.json(await collaboration.getRoom(code));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/rooms/:code/join', async (req, res, next) => {
+    try {
+      const code = roomCode.parse(req.params.code);
+      const body = z.object({
+        userId: z.string().min(1).max(100),
+        operationId
+      }).parse(req.body);
+      res.json(await collaboration.joinRoom(code, body.userId, body.operationId));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/rooms/:code/messages', async (req, res, next) => {
+    try {
+      const code = roomCode.parse(req.params.code);
+      const body = z.object({
+        userId: z.string().min(1).max(100),
+        message: z.string().max(500),
+        operationId
+      }).parse(req.body);
+      res.status(201).json(await collaboration.sendMessage(code, body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/rooms/:code/vote', async (req, res, next) => {
+    try {
+      const code = roomCode.parse(req.params.code);
+      const body = z.object({
+        userId: z.string().min(1).max(100),
+        restaurantId: z.string().min(1).max(100),
+        operationId
+      }).parse(req.body);
+      res.json(await collaboration.vote(code, body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/rooms/:code/cart/items/:itemId', async (req, res, next) => {
+    try {
+      const code = roomCode.parse(req.params.code);
+      const body = z.object({
+        userId: z.string().min(1).max(100),
+        restaurantId: z.string().min(1).max(100),
+        quantity: z.number().int().min(0).max(20),
+        customization: z.string().trim().max(120).default('Regular'),
+        operationId
+      }).parse(req.body);
+      res.json(await collaboration.setCartItem(code, { ...body, itemId: req.params.itemId }));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/rooms/:code/checkout', async (req, res, next) => {
+    try {
+      const code = roomCode.parse(req.params.code);
+      const body = z.object({
+        userId: z.string().min(1).max(100),
+        confirmed: z.literal(true),
+        operationId: z.string().min(8).max(120)
+      }).parse(req.body);
+      res.status(201).json(await collaboration.checkout(code, body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/collaboration/orders/:orderId', async (req, res, next) => {
+    try {
+      res.json(await collaboration.getOrder(req.params.orderId));
+    } catch (error) {
+      next(error);
+    }
   });
 
   return router;

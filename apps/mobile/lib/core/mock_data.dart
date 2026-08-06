@@ -9,9 +9,20 @@ const _images = [
 ];
 
 final mockParticipants = [
-  const Participant(id: 'u1', name: 'Vamsi', avatar: 'GV', color: 0xFFFF6D21, cursorLabel: 'locking restaurant'),
-  const Participant(id: 'u2', name: 'Aarav', avatar: 'AR', color: 0xFF2D6A4F, isTyping: true),
-  const Participant(id: 'u3', name: 'Maya', avatar: 'MY', color: 0xFF6C5CE7, cursorLabel: 'viewing desserts'),
+  const Participant(
+      id: 'u1',
+      name: 'Vamsi',
+      avatar: 'GV',
+      color: 0xFFFF6D21,
+      cursorLabel: 'locking restaurant'),
+  const Participant(
+      id: 'u2', name: 'Aarav', avatar: 'AR', color: 0xFF2D6A4F, isTyping: true),
+  const Participant(
+      id: 'u3',
+      name: 'Maya',
+      avatar: 'MY',
+      color: 0xFF6C5CE7,
+      cursorLabel: 'viewing desserts'),
   const Participant(id: 'u4', name: 'Zoya', avatar: 'ZY', color: 0xFFE84393),
   const Participant(id: 'u5', name: 'Kabir', avatar: 'KB', color: 0xFF0984E3),
 ];
@@ -38,7 +49,16 @@ final mockRestaurants = List.generate(20, (index) {
     'Curry Cloud',
     'Dessert District',
   ];
-  final cuisines = ['Biryani', 'Pizza', 'Burgers', 'Asian', 'South Indian', 'Mexican', 'North Indian', 'Tibetan'];
+  final cuisines = [
+    'Biryani',
+    'Pizza',
+    'Burgers',
+    'Asian',
+    'South Indian',
+    'Mexican',
+    'North Indian',
+    'Tibetan'
+  ];
   return Restaurant(
     id: 'r$index',
     name: '${names[index % names.length]} ${index > 9 ? 'Express' : ''}'.trim(),
@@ -60,12 +80,42 @@ final mockRestaurants = List.generate(20, (index) {
 
 final mockMenu = mockRestaurants.expand((restaurant) {
   final dishes = [
-    ('Paneer Tikka Bowl', 'Smoky paneer, mint chutney, pickled onions', 249, [DietaryTag.veg, DietaryTag.spicy]),
-    ('Chicken Biryani', 'Dum cooked rice, raita, salan', 329, [DietaryTag.nonVeg, DietaryTag.spicy, DietaryTag.party]),
-    ('Truffle Fries', 'Crispy fries, herb aioli, parmesan dust', 179, [DietaryTag.veg, DietaryTag.party]),
-    ('Rainbow Salad', 'Greens, grains, avocado, citrus dressing', 219, [DietaryTag.veg, DietaryTag.healthy]),
-    ('Chocolate Brownie Box', 'Six warm brownies for sharing', 299, [DietaryTag.dessert, DietaryTag.party]),
-    ('Late Night Combo', 'Two mains, two drinks, one dessert', 599, [DietaryTag.lateNight, DietaryTag.party]),
+    (
+      'Paneer Tikka Bowl',
+      'Smoky paneer, mint chutney, pickled onions',
+      249,
+      [DietaryTag.veg, DietaryTag.spicy]
+    ),
+    (
+      'Chicken Biryani',
+      'Dum cooked rice, raita, salan',
+      329,
+      [DietaryTag.nonVeg, DietaryTag.spicy, DietaryTag.party]
+    ),
+    (
+      'Truffle Fries',
+      'Crispy fries, herb aioli, parmesan dust',
+      179,
+      [DietaryTag.veg, DietaryTag.party]
+    ),
+    (
+      'Rainbow Salad',
+      'Greens, grains, avocado, citrus dressing',
+      219,
+      [DietaryTag.veg, DietaryTag.healthy]
+    ),
+    (
+      'Chocolate Brownie Box',
+      'Six warm brownies for sharing',
+      299,
+      [DietaryTag.dessert, DietaryTag.party]
+    ),
+    (
+      'Late Night Combo',
+      'Two mains, two drinks, one dessert',
+      599,
+      [DietaryTag.lateNight, DietaryTag.party]
+    ),
   ];
   return dishes.asMap().entries.map((entry) {
     final dish = entry.value;
@@ -82,13 +132,36 @@ final mockMenu = mockRestaurants.expand((restaurant) {
 }).toList();
 
 final mockMessages = [
-  ChatMessage(id: 'm1', sender: mockParticipants[1], message: 'Can we keep it spicy but not too heavy?', time: DateTime.now().subtract(const Duration(minutes: 12)), reaction: '🔥'),
-  ChatMessage(id: 'm2', sender: mockParticipants[2], message: 'I am vegetarian tonight. Paneer or dosa works.', time: DateTime.now().subtract(const Duration(minutes: 8))),
-  ChatMessage(id: 'm3', sender: mockParticipants[0], message: 'Voting closes in 2 minutes, then checkout through Swiggy.', time: DateTime.now().subtract(const Duration(minutes: 4)), reaction: '✅'),
+  ChatMessage(
+      id: 'm1',
+      sender: mockParticipants[1],
+      message: 'Can we keep it spicy but not too heavy?',
+      time: DateTime.now().subtract(const Duration(minutes: 12)),
+      reaction: '🔥'),
+  ChatMessage(
+      id: 'm2',
+      sender: mockParticipants[2],
+      message: 'I am vegetarian tonight. Paneer or dosa works.',
+      time: DateTime.now().subtract(const Duration(minutes: 8))),
+  ChatMessage(
+      id: 'm3',
+      sender: mockParticipants[0],
+      message: 'Voting closes in 2 minutes, then checkout through Swiggy.',
+      time: DateTime.now().subtract(const Duration(minutes: 4)),
+      reaction: '✅'),
 ];
 
 final mockActivity = [
-  ActivityEvent(id: 'a1', text: 'Maya voted for Pizza Ritual', time: DateTime.now().subtract(const Duration(minutes: 10))),
-  ActivityEvent(id: 'a2', text: 'Aarav added Chicken Biryani', time: DateTime.now().subtract(const Duration(minutes: 6))),
-  ActivityEvent(id: 'a3', text: 'Zoya joined via invite link', time: DateTime.now().subtract(const Duration(minutes: 3))),
+  ActivityEvent(
+      id: 'a1',
+      text: 'Maya voted for Pizza Ritual',
+      time: DateTime.now().subtract(const Duration(minutes: 10))),
+  ActivityEvent(
+      id: 'a2',
+      text: 'Aarav added Chicken Biryani',
+      time: DateTime.now().subtract(const Duration(minutes: 6))),
+  ActivityEvent(
+      id: 'a3',
+      text: 'Zoya joined via invite link',
+      time: DateTime.now().subtract(const Duration(minutes: 3))),
 ];

@@ -12,6 +12,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Continue with Swiggy'), findsOneWidget);
+    expect(find.text('Enter Homie locally'), findsOneWidget);
   });
 }

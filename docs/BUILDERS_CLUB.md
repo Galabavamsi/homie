@@ -34,6 +34,16 @@ Initial demo and private beta: under 1K requests/day.
 
 The backend is designed so MCP request volume can be rate-limited and monitored centrally.
 
+## Legal Form Category
+
+Suggested answer for **Business Category of Partner**:
+
+```text
+Food-tech / Consumer Internet Software - Collaborative Food Ordering Platform
+```
+
+Homie is currently an individual developer project applying under the Developer track, not a restaurant, reseller, or Swiggy data aggregator.
+
 ## Use Case Fit
 
 Homie improves ordering, discovery, and dining workflows without obscuring Swiggy's role. Swiggy attribution remains visible in the app and API docs, and all commerce actions are modeled as Swiggy-owned.

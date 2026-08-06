@@ -19,11 +19,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
-      GoRoute(path: '/create-room', builder: (_, __) => const CreateRoomScreen()),
+      GoRoute(
+          path: '/create-room', builder: (_, __) => const CreateRoomScreen()),
       GoRoute(path: '/invite', builder: (_, __) => const InviteScreen()),
       GoRoute(path: '/room', builder: (_, __) => const RoomScreen()),
       GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),
-      GoRoute(path: '/tracking', builder: (_, __) => const OrderTrackingScreen()),
+      GoRoute(
+          path: '/tracking', builder: (_, __) => const OrderTrackingScreen()),
     ],
   );
 });

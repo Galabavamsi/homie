@@ -59,6 +59,34 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
             sliver: SliverList.list(
               children: [
                 _RoomHero(state: state),
+                if (state.errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  StatusBanner(
+                    message: state.errorMessage!,
+                    isError: true,
+                    onRetry: () {
+                      controller.refreshRoom();
+                    },
+                    onDismiss: controller.dismissError,
+                  ),
+                ],
+                if (state.realtimeStatus != RealtimeStatus.connected) ...[
+                  const SizedBox(height: 12),
+                  StatusBanner(
+                    message: state.realtimeStatus == RealtimeStatus.offline
+                        ? 'Realtime is offline. Updates will use HTTP until Socket.IO reconnects.'
+                        : 'Reconnecting realtime updates...',
+                    icon: Icons.sync_rounded,
+                  ),
+                ],
+                if (state.isRoomLocked) ...[
+                  const SizedBox(height: 12),
+                  const StatusBanner(
+                    message:
+                        'Checkout is confirmed. This room is now read-only.',
+                    icon: Icons.lock_rounded,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _Discovery(state: state, controller: controller),
                 const SizedBox(height: 16),
@@ -67,7 +95,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
                 const SizedBox(height: 16),
                 _Menu(state: state, controller: controller),
                 const SizedBox(height: 16),
-                _Cart(state: state),
+                _Cart(state: state, controller: controller),
                 const SizedBox(height: 16),
                 _Chat(
                     state: state,
@@ -160,8 +188,16 @@ class _RoomHero extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.w900)),
               ),
               Chip(
-                  label: Text('${state.room.participants.length} online'),
-                  avatar: const Icon(Icons.bolt_rounded, size: 16)),
+                label: Text(
+                  '${state.room.participants.where((user) => user.isOnline).length} online',
+                ),
+                avatar: Icon(
+                  state.realtimeStatus == RealtimeStatus.connected
+                      ? Icons.bolt_rounded
+                      : Icons.sync_rounded,
+                  size: 16,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -270,13 +306,11 @@ class _Discovery extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Image.network(
-                              '${restaurant.image}?auto=format&fit=crop&w=500&q=70',
-                              height: 96,
-                              width: double.infinity,
-                              fit: BoxFit.cover),
+                        FoodImage(
+                          url: restaurant.image,
+                          height: 96,
+                          width: double.infinity,
+                          borderRadius: 8,
                         ),
                         const SizedBox(height: 10),
                         Text(restaurant.name,
@@ -333,6 +367,9 @@ class _Voting extends StatelessWidget {
         children: [
           const SectionHeader(title: 'Live restaurant voting'),
           const SizedBox(height: 8),
+          if (entries.isEmpty)
+            const Text(
+                'No votes yet. Pick a restaurant to start the room vote.'),
           for (final entry in entries.take(5))
             Builder(
               builder: (context) {
@@ -364,9 +401,16 @@ class _Voting extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text('${entry.value}'),
                       IconButton.filledTonal(
-                        tooltip: 'Vote',
-                        onPressed: () => controller.vote(entry.key),
-                        icon: const Icon(Icons.how_to_vote_rounded),
+                        tooltip:
+                            state.myVote == entry.key ? 'Your vote' : 'Vote',
+                        onPressed: state.isRoomLocked
+                            ? null
+                            : () => controller.vote(entry.key),
+                        icon: Icon(
+                          state.myVote == entry.key
+                              ? Icons.check_rounded
+                              : Icons.how_to_vote_rounded,
+                        ),
                       ),
                     ],
                   ),
@@ -393,18 +437,21 @@ class _Menu extends StatelessWidget {
         children: [
           SectionHeader(title: '${state.selectedRestaurant.name} menu'),
           const SizedBox(height: 12),
+          if (state.selectedMenu.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
           for (final item in state.selectedMenu)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.network(
-                        '${item.image}?auto=format&fit=crop&w=220&q=70',
-                        width: 82,
-                        height: 82,
-                        fit: BoxFit.cover),
+                  FoodImage(
+                    url: item.image,
+                    width: 82,
+                    height: 82,
+                    borderRadius: 8,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -426,7 +473,9 @@ class _Menu extends StatelessWidget {
                   ),
                   IconButton.filled(
                     tooltip: 'Add',
-                    onPressed: () => controller.addToCart(item),
+                    onPressed: state.isRoomLocked
+                        ? null
+                        : () => controller.addToCart(item),
                     icon: const Icon(Icons.add_shopping_cart_rounded),
                   ),
                 ],
@@ -439,9 +488,10 @@ class _Menu extends StatelessWidget {
 }
 
 class _Cart extends StatelessWidget {
-  const _Cart({required this.state});
+  const _Cart({required this.state, required this.controller});
 
   final HomieState state;
+  final HomieController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -449,6 +499,8 @@ class _Cart extends StatelessWidget {
     for (final item in state.cart) {
       byOwner.putIfAbsent(item.owner.id, () => []).add(item);
     }
+    final canCheckout =
+        state.isHost && state.cart.isNotEmpty && !state.isRoomLocked;
     return GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,12 +508,18 @@ class _Cart extends StatelessWidget {
           SectionHeader(
             title: 'Shared cart',
             action: TextButton.icon(
-              onPressed: () => context.go('/checkout'),
+              onPressed: canCheckout ? () => context.go('/checkout') : null,
               icon: const Icon(Icons.lock_rounded),
-              label: const Text('Checkout'),
+              label: Text(state.isHost ? 'Checkout' : 'Host checkout'),
             ),
           ),
           const SizedBox(height: 8),
+          if (byOwner.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child:
+                  Text('The shared cart is empty. Add a dish from the menu.'),
+            ),
           for (final entry in byOwner.entries)
             Builder(
               builder: (context) {
@@ -479,12 +537,65 @@ class _Cart extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${owner.name} owes ${money.format(total)}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w900)),
-                            for (final item in entry.value)
-                              Text('${item.quantity}x ${item.item.name}',
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(
+                              '${owner.name} owes ${money.format(total)}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                            for (final line in entry.value)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      line.item.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (owner.id == state.currentUser.id &&
+                                      !state.isRoomLocked) ...[
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: line.quantity == 1
+                                          ? 'Remove'
+                                          : 'Decrease',
+                                      onPressed: () =>
+                                          controller.setCartQuantity(
+                                        line.item,
+                                        line.quantity - 1,
+                                      ),
+                                      icon: Icon(
+                                        line.quantity == 1
+                                            ? Icons.delete_outline_rounded
+                                            : Icons.remove_rounded,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 24,
+                                      child: Text(
+                                        '${line.quantity}',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Increase',
+                                      onPressed: line.quantity >= 20
+                                          ? null
+                                          : () => controller.setCartQuantity(
+                                                line.item,
+                                                line.quantity + 1,
+                                              ),
+                                      icon: const Icon(Icons.add_rounded,
+                                          size: 18),
+                                    ),
+                                  ] else
+                                    Text('${line.quantity}x'),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -541,12 +652,25 @@ class _Chat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Future<void> send() async {
+      final message = messageController.text.trim();
+      if (message.isEmpty) return;
+      await controller.sendMessage(message);
+      messageController.clear();
+      controller.setTyping(false);
+    }
+
     return GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionHeader(title: 'Room chat'),
           const SizedBox(height: 8),
+          if (state.messages.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('No messages yet. Say hello to the room.'),
+            ),
           for (final message in state.messages.take(4))
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -557,25 +681,24 @@ class _Chat extends StatelessWidget {
               trailing: message.reaction == null
                   ? null
                   : Text(message.reaction!,
-                      style: const TextStyle(fontSize: 20)),
+                      style: const TextStyle(fontSize: 13)),
             ),
           TextField(
             controller: messageController,
+            enabled: !state.isRoomLocked,
             decoration: InputDecoration(
-              hintText: 'Message the room',
+              hintText:
+                  state.isRoomLocked ? 'Room is read-only' : 'Message the room',
               prefixIcon: const Icon(Icons.chat_bubble_rounded),
               suffixIcon: IconButton(
+                tooltip: 'Send',
                 icon: const Icon(Icons.send_rounded),
-                onPressed: () {
-                  controller.sendMessage(messageController.text);
-                  messageController.clear();
-                },
+                onPressed: state.isRoomLocked ? null : send,
               ),
             ),
-            onSubmitted: (value) {
-              controller.sendMessage(value);
-              messageController.clear();
-            },
+            onChanged: (value) => controller.setTyping(value.trim().isNotEmpty),
+            onSubmitted: (_) => send(),
+            onTapOutside: (_) => controller.setTyping(false),
           ),
         ],
       ),
@@ -601,7 +724,7 @@ class _Activity extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.bolt_rounded, color: Color(0xFFFF6D21)),
               title: Text(event.text),
-              subtitle: const Text('Synced over Socket.io mock channel'),
+              subtitle: const Text('Persisted and broadcast through Socket.IO'),
             ),
         ],
       ),

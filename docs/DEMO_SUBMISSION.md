@@ -1,58 +1,58 @@
 # Homie Builders Club Demo Submission
 
-## Files to Send
-
-- Video: `docs/demo/homie-builders-club-demo.mp4`
-- Cover image: `docs/demo/homie-builders-club-demo-cover.png`
-- Repository: https://github.com/Galabavamsi/homie
-
 ## Reply Email
 
-**Subject:** Homie demo - Swiggy Builders Club
+**Subject:** Homie native MVP demo and Food MCP integration questions
 
 Hi Swiggy Builders Club team,
 
-Thank you for following Homie's progress, and apologies for the slightly delayed reply. I have attached the latest short walkthrough of the local MVP.
+Thank you for following up, and apologies for sending this after the requested date. I have completed the latest native Android MVP of Homie and would be grateful if you could still review it.
 
-Homie adds a collaboration layer around Swiggy Food: users create a shared room, invite participants by link, code, or QR, discover and vote on restaurants, add individually owned items to one shared cart, see the live bill split, explicitly confirm checkout, and follow delivery together. Swiggy remains clearly attributed and remains the source of truth for restaurant data, pricing, cart validation, checkout, payment, and delivery.
+Homie adds a collaboration layer around Swiggy Food. A host creates a shared room; friends, family, flatmates, or teammates join using a code, link, or QR; participants vote on a restaurant, chat in realtime, and add individually owned items to one shared cart. Homie calculates each person's subtotal and requires explicit host confirmation before handing commerce to Swiggy.
 
-Demo video: [attach `homie-builders-club-demo.mp4` or add a Drive link]
+The current build has a Flutter Android client and a Node.js/Express backend with Socket.IO, PostgreSQL, and Redis. Room creation, membership, chat, voting, cart ownership, retry deduplication, and checkout authorization are running end to end locally. Swiggy restaurant/menu/order calls remain behind a clearly labeled local MCP stub until OAuth development or staging access is issued.
+
+Demo video: [add Drive/YouTube link]
 
 GitHub: https://github.com/Galabavamsi/homie
 
-The current demo uses a deterministic mock adapter behind the same MCP service boundary. The backend is aligned to the Food MCP `tools/call` flow and can switch from mock to live mode when production or staging credentials are available.
+I would appreciate your engineering guidance on these integration decisions:
 
-I would also appreciate your guidance on a few implementation decisions:
+1. Should a collaborative room use one host's Swiggy OAuth session for the consolidated cart and order, while other participants remain Homie-only collaborators, or must every participant authorize with Swiggy?
+2. Is it acceptable to keep voting and per-person item ownership in Homie, then synchronize one consolidated cart through `update_food_cart` after the restaurant is chosen?
+3. For stock, price, or add-on changes between participant selection and checkout, should Homie re-fetch the menu first, rely on `update_food_cart` errors, or always treat `get_food_cart` as the final canonical reconciliation step?
+4. Does the staging/development environment support safe end-to-end `place_food_order` testing, and what payment method and delivery address constraints should the first test follow?
+5. After an uncertain timeout from non-idempotent `place_food_order`, which order-history/status tool and correlation field should we use before deciding whether a retry is safe?
+6. Are tracking updates polling-only, and what interval do you recommend for a room with multiple viewers?
+7. Can you share required Swiggy attribution assets, wording, and co-branding rules for restaurant cards, cart confirmation, and tracking?
+8. For a developer integration, should Homie use Dynamic Client Registration locally and receive a fixed client ID for production, or will both environments use issued credentials?
 
-1. For group ordering, should every room participant complete Swiggy OAuth, or may one host authorize the Swiggy cart and checkout while the other participants collaborate only inside Homie?
-2. Is the recommended model to keep participant item ownership and voting in Homie, then send a consolidated cart through `update_food_cart` only after the restaurant is locked?
-3. Is host-only explicit confirmation the preferred checkout pattern for a shared room?
-4. Can you share the required Swiggy attribution assets or co-branding guidance for the production UI?
-5. When the local demo is approved, should we validate the first real order in a staging environment before applying for gradual production access?
-
-I would be happy to walk the engineering team through the architecture or adapt the flow to your recommended collaboration pattern.
+I am happy to share the API contract, architecture diagram, native screenshots, or walk your engineering team through the flow.
 
 Cheers,
 
 Galaba Vamsi
 Homie
 
-## 50-Second Narration
+## 60-Second Walkthrough
 
-> Homie makes ordering food together easier without replacing Swiggy. A host creates a room and invites friends, flatmates, family, or teammates using a QR code, link, or room code. Everyone can discover Swiggy restaurants, vote live, and add their own menu items. Homie tracks who owns each item and calculates the split while keeping the consolidated cart inside Swiggy's current local beta limit. Checkout requires explicit host confirmation, and Swiggy remains responsible for restaurant data, pricing, payment, fulfillment, and delivery. After checkout, the whole room follows the same delivery timeline. Homie owns collaboration; Swiggy remains the commerce platform.
+1. Open the native Android app and create a local identity.
+2. Show the home screen's honest `local Swiggy MCP stub` attribution.
+3. Create a room and show its QR, share action, and code.
+4. Join `HOMIE42`, then show presence and restaurant discovery.
+5. Vote, add a dish, and show the participant-owned cart and split.
+6. Send a chat message and briefly show it in a second client or the room API.
+7. Open a host-created room, confirm checkout, and show the locked room/tracking state.
+8. Close on: “Homie owns collaboration; Swiggy remains the commerce platform.”
 
-## Re-record
+## Record From Android
 
-Start the release web app on port 5100, then run:
+Start the API and Android app, then use Android Studio's emulator recorder or ADB:
 
-```bash
-cd apps/api
-npm install
-npm run record:demo
+```powershell
+adb shell screenrecord --time-limit 90 /sdcard/homie-native.mp4
+# Walk through the app, then stop with Ctrl+C.
+adb pull /sdcard/homie-native.mp4 docs\demo\homie-native.mp4
 ```
 
-Override the default URL or Chrome executable when needed:
-
-```bash
-HOMIE_DEMO_URL=http://127.0.0.1:5100 CHROME_PATH=/path/to/chrome npm run record:demo
-```
+Keep the video under 90 seconds, hide terminal secrets, and show the stub/live label so the demo does not imply unissued Swiggy access.

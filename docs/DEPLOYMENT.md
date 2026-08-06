@@ -1,94 +1,56 @@
-# Demo and Deployment
+# Demo And Deployment
 
 ## Local Demo
 
-For the fastest recording flow, use [LOCAL_MVP.md](LOCAL_MVP.md).
+Use [LOCAL_MVP.md](LOCAL_MVP.md). The Flutter app requires the Homie API; it no longer mutates an isolated in-process demo cart.
 
-Start the backend:
-
-```bash
-cd apps/api
-npm install
-npm run dev
+```powershell
+.\scripts\start-local.ps1
+.\scripts\run-android.ps1
 ```
 
-Open these health/demo endpoints:
+## DNS Shape
 
-```text
-http://localhost:4000/api/health
-http://localhost:4000/api/mcp/restaurants
-http://localhost:4000/api/mcp/menu/r0
-```
-
-Food MCP-shaped JSON-RPC mock:
-
-```bash
-curl -X POST http://localhost:4000/api/mcp/food \
-  -H "Content-Type: application/json" \
-  -d "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_food_cart\",\"arguments\":{}},\"id\":1}"
-```
-
-Start the Flutter app:
-
-```bash
-cd apps/mobile
-flutter pub get
-flutter run -d chrome
-```
-
-The app currently uses mocked MCP data in the Flutter layer, so the visual demo works even if the backend is not running. The backend exists to show the production integration shape.
-
-## Production DNS Shape
-
-The existing `humanslop.in` website can remain unchanged.
-
-Use subdomains:
+The existing `humanslop.in` site can stay unchanged. DNS records are independent by hostname:
 
 ```text
 humanslop.in          existing website
-api.humanslop.in      Homie Node.js backend
-homie.humanslop.in    Homie Flutter web demo
+api.humanslop.in      Homie Node.js API and OAuth callback
+homie.humanslop.in    optional invite/deep-link landing page
 ```
 
-Swiggy OAuth redirect URI:
+Point only `api.humanslop.in` to the backend provider. Configure TLS there, then register the exact callback:
 
 ```text
 https://api.humanslop.in/auth/callback
 ```
 
-Swiggy docs require redirect URIs to be HTTPS exact matches. `http://localhost` is acceptable for local development, but production callbacks must be explicit allowlisted URLs with no wildcards.
+DNS alone is not enough: the backend must expose that route over HTTPS, and Swiggy must allowlist the exact URI.
 
-## Backend Hosting
+## Backend Requirements
 
-Recommended MVP hosting:
+- Always-on Node.js/Express service with WebSocket support.
+- Managed PostgreSQL.
+- Managed Redis for the Socket.IO adapter.
+- TLS and custom domain support.
+- Stable outbound IP/gateway if Swiggy requires IP allowlisting.
+- Secret manager for OAuth client material and encrypted refresh tokens.
+- Health checks against `/api/health` and `/api/ready`.
 
-- Railway for Node.js, PostgreSQL, Redis, HTTPS, custom domains, and later static outbound IPs.
-- Render is also fine for Node.js hosting and static outbound IPs on paid plans.
+Render, Railway, Fly.io, or a small cloud VM can host this shape; select the provider only after confirming static egress, WebSocket, region, and database requirements with Swiggy.
 
-For Swiggy MCP production access, deploy the backend first, enable static outbound IPs if required, then share the final allowlist IPs with Swiggy.
-
-## Builders Club Form Answers
-
-Redirect URI:
-
-```text
-https://api.humanslop.in/auth/callback
-```
-
-Static IP ranges or gateway IPs:
+## Builders Club Architecture Answer
 
 ```text
-For the MVP demo, Homie uses mocked/local Swiggy MCP responses. For production MCP access, the backend will be deployed at api.humanslop.in with static outbound IPs enabled before go-live, and the final allowlist IPs will be shared with Swiggy during onboarding.
+Homie is a native Flutter application backed by a Node.js/Express API. Socket.IO provides acknowledged realtime room updates, PostgreSQL stores users, rooms, participants, messages, votes, participant-owned cart lines, activity, and order references, and Redis provides cross-instance Socket.IO pub/sub. Swiggy Food MCP is isolated server-side behind an MCPService using OAuth 2.1 with PKCE. Homie stores collaboration metadata only; Swiggy remains the source of truth for restaurant availability, menus, prices, cart validation, checkout, payment, fulfillment, and tracking.
 ```
 
-Architecture overview:
+## Production Checklist
 
-```text
-Homie is a Flutter mobile app backed by a Node.js/Express API with Socket.io for real-time room collaboration. PostgreSQL stores rooms, participants, messages, votes, and cart ownership metadata, while Redis handles presence, typing indicators, and realtime sync. Swiggy MCP calls are isolated server-side behind an MCPService layer for restaurant discovery, menu retrieval, cart sync, checkout, and order tracking. Homie stores collaboration data only; Swiggy remains the source of truth for restaurants, pricing, payments, delivery, and tracking.
-```
-
-Updated Swiggy-docs-specific note:
-
-```text
-Homie's backend models Swiggy Food MCP as a JSON-RPC tools/call integration using OAuth 2.1 with PKCE. The intended Food flow is get_addresses -> search_restaurants -> get_restaurant_menu/search_menu -> update_food_cart -> get_food_cart -> place_food_order -> track_food_order. Homie will always show user-visible cart/address/payment confirmation before place_food_order, enforce the current Builders Club beta cart cap below ₹1000, and avoid blind retries on non-idempotent order placement.
-```
+1. Obtain Swiggy development/staging OAuth details and attribution guidance.
+2. Implement authorization-code + PKCE token exchange, encrypted storage, refresh, and revocation.
+3. Validate the live Food response schemas in the adapter.
+4. Reconcile the consolidated cart with `get_food_cart` before explicit host confirmation.
+5. Test uncertain `place_food_order` outcomes without blind retries.
+6. Add API rate limiting, structured correlation logs, alerts, backups, and retention jobs.
+7. Complete a staging order and gradual production rollout with Swiggy.
