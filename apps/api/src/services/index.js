@@ -7,14 +7,23 @@ import { MenuService } from './MenuService.js';
 import { OrderService } from './OrderService.js';
 import { RestaurantService } from './RestaurantService.js';
 import { RoomService } from './RoomService.js';
+import { SwiggyOAuthService } from './SwiggyOAuthService.js';
 import { UserService } from './UserService.js';
 
 export function createServices(repository) {
+  const swiggyOAuthService = new SwiggyOAuthService({
+    baseUrl: env.swiggyMcpBaseUrl,
+    redirectUri: env.swiggyOAuthCallback,
+    clientId: env.swiggyOAuthClientId,
+    clientName: env.swiggyOAuthClientName,
+    scope: env.swiggyOAuthScope
+  });
   const mcpService = new McpService({
     baseUrl: env.swiggyMcpBaseUrl,
     foodUrl: env.swiggyMcpFoodUrl,
     mode: env.swiggyMcpMode,
-    oauthCallback: env.swiggyOAuthCallback
+    oauthCallback: env.swiggyOAuthCallback,
+    oauthService: swiggyOAuthService
   });
   const restaurantService = new RestaurantService(mcpService);
   const menuService = new MenuService(mcpService);
@@ -22,6 +31,7 @@ export function createServices(repository) {
 
   return {
     repository,
+    swiggyOAuthService,
     mcpService,
     demoAgentService: new DemoAgentService(mcpService),
     restaurantService,

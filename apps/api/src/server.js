@@ -11,6 +11,7 @@ import { closePostgres } from './config/postgres.js';
 import { closeRedis, configureSocketRedis } from './config/redis.js';
 import { createCollaborationRepository } from './data/repository.js';
 import { createRouter } from './routes/index.js';
+import { createAuthRouter } from './routes/auth.js';
 import { createServices } from './services/index.js';
 import { registerRoomSockets } from './sockets/roomSocket.js';
 
@@ -32,6 +33,7 @@ export async function buildHomieServer({ repository: suppliedRepository } = {}) 
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
+  app.use(createAuthRouter(services));
   app.use('/api', createRouter(services));
   app.use((_req, res) => {
     res.status(404).json({ error: { code: 'route_not_found', message: 'Route not found' } });

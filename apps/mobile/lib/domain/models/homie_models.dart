@@ -105,6 +105,20 @@ class Restaurant {
   final String offer;
 }
 
+class DeliveryAddress {
+  const DeliveryAddress({
+    required this.id,
+    required this.label,
+    required this.displayText,
+    required this.city,
+  });
+
+  final String id;
+  final String label;
+  final String displayText;
+  final String city;
+}
+
 class MenuItem {
   const MenuItem({
     required this.id,
@@ -375,6 +389,10 @@ class HomieState {
     this.search = '',
     this.filter,
     this.hasSession = false,
+    this.swiggyConnected = false,
+    this.swiggyExpiresAt,
+    this.addresses = const [],
+    this.selectedAddressId,
     this.isLoading = false,
     this.isBusy = false,
     this.realtimeStatus = RealtimeStatus.idle,
@@ -398,6 +416,10 @@ class HomieState {
   final String search;
   final DietaryTag? filter;
   final bool hasSession;
+  final bool swiggyConnected;
+  final String? swiggyExpiresAt;
+  final List<DeliveryAddress> addresses;
+  final String? selectedAddressId;
   final bool isLoading;
   final bool isBusy;
   final RealtimeStatus realtimeStatus;
@@ -413,10 +435,25 @@ class HomieState {
   bool get isRoomLocked => room.status != 'open';
   String? get myVote => userVotes[currentUser.id];
 
-  Restaurant get selectedRestaurant => restaurants.firstWhere(
-        (restaurant) => restaurant.id == selectedRestaurantId,
-        orElse: () => restaurants.first,
+  Restaurant get selectedRestaurant {
+    if (restaurants.isEmpty) {
+      return const Restaurant(
+        id: '',
+        name: 'Choose a restaurant',
+        cuisine: '',
+        rating: 0,
+        etaMinutes: 0,
+        priceForTwo: 0,
+        image: '',
+        tags: [],
+        offer: '',
       );
+    }
+    return restaurants.firstWhere(
+      (restaurant) => restaurant.id == selectedRestaurantId,
+      orElse: () => restaurants.first,
+    );
+  }
 
   List<MenuItem> get selectedMenu =>
       menu.where((item) => item.restaurantId == selectedRestaurantId).toList();
@@ -437,6 +474,10 @@ class HomieState {
     DietaryTag? filter,
     bool clearFilter = false,
     bool? hasSession,
+    bool? swiggyConnected,
+    String? swiggyExpiresAt,
+    List<DeliveryAddress>? addresses,
+    String? selectedAddressId,
     bool? isLoading,
     bool? isBusy,
     RealtimeStatus? realtimeStatus,
@@ -460,6 +501,10 @@ class HomieState {
       search: search ?? this.search,
       filter: clearFilter ? null : filter ?? this.filter,
       hasSession: hasSession ?? this.hasSession,
+      swiggyConnected: swiggyConnected ?? this.swiggyConnected,
+      swiggyExpiresAt: swiggyExpiresAt ?? this.swiggyExpiresAt,
+      addresses: addresses ?? this.addresses,
+      selectedAddressId: selectedAddressId ?? this.selectedAddressId,
       isLoading: isLoading ?? this.isLoading,
       isBusy: isBusy ?? this.isBusy,
       realtimeStatus: realtimeStatus ?? this.realtimeStatus,

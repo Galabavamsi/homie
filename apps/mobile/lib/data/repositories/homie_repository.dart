@@ -37,6 +37,50 @@ class HomieRepository {
     return 'swiggy_mcp_${health['mcpMode'] ?? 'mock'}';
   }
 
+  Future<Uri> swiggyAuthUrl(String userId) async {
+    final response = await _api.swiggyAuthStart(userId);
+    final url = response['authorizationUrl']?.toString();
+    if (url == null || url.isEmpty) {
+      throw const ApiException(
+          'oauth_url_missing', 'Swiggy did not return a connection URL');
+    }
+    return Uri.parse(url);
+  }
+
+  Future<bool> swiggyConnected(String userId) async {
+    final response = await _api.swiggyAuthStatus(userId);
+    return response['connected'] == true;
+  }
+
+  Future<List<DeliveryAddress>> addresses(String userId) async {
+    final response = await _api.addresses(userId);
+    return (response['data'] as List? ?? const [])
+        .map((value) {
+          final json = Map<String, dynamic>.from(value as Map);
+          final displayText = json['displayText'] ??
+              json['address'] ??
+              json['fullAddress'] ??
+              json['city'] ??
+              json['label'] ??
+              'Saved Swiggy address';
+          return DeliveryAddress(
+            id: json['id'].toString(),
+            label: json['label']?.toString() ?? 'Saved address',
+            displayText: displayText.toString(),
+            city: json['city']?.toString() ?? '',
+          );
+        })
+        .where((address) => address.id != 'null' && address.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> selectAddress({
+    required String userId,
+    required String addressId,
+  }) async {
+    await _api.selectAddress(userId: userId, addressId: addressId);
+  }
+
   Future<Participant?> restoreUser() async {
     final preferences = await SharedPreferences.getInstance();
     final raw = preferences.getString(_userKey);
@@ -62,9 +106,18 @@ class HomieRepository {
     return user;
   }
 
-  Future<RestaurantResult> restaurants(
-      {String? query, DietaryTag? filter}) async {
-    final response = await _api.restaurants(query: query, tag: filter?.name);
+  Future<RestaurantResult> restaurants({
+    String? query,
+    DietaryTag? filter,
+    String? userId,
+    String? addressId,
+  }) async {
+    final response = await _api.restaurants(
+      query: query,
+      tag: filter?.name,
+      userId: userId,
+      addressId: addressId,
+    );
     final values = (response['data'] as List? ?? const [])
         .map((value) =>
             Restaurant.fromJson(Map<String, dynamic>.from(value as Map)))
@@ -73,8 +126,16 @@ class HomieRepository {
         values, response['source']?.toString() ?? 'swiggy_mcp_mock');
   }
 
-  Future<List<MenuItem>> menu(String restaurantId) async {
-    final response = await _api.menu(restaurantId);
+  Future<List<MenuItem>> menu(
+    String restaurantId, {
+    String? userId,
+    String? addressId,
+  }) async {
+    final response = await _api.menu(
+      restaurantId,
+      userId: userId,
+      addressId: addressId,
+    );
     return (response['data'] as List? ?? const [])
         .map((value) =>
             MenuItem.fromJson(Map<String, dynamic>.from(value as Map)))

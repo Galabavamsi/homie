@@ -65,7 +65,9 @@ export class CollaborationService {
   async vote(code, { userId, restaurantId, operationId }) {
     return this.#idempotent(operationId, async () => {
       const snapshot = await this.#requireOpenMember(code, userId);
-      const restaurants = await this.restaurantService.list({});
+      const restaurants = await this.restaurantService.list({
+        userId: snapshot.room.hostUserId
+      });
       const restaurant = restaurants.find((item) => item.id === restaurantId);
       if (!restaurant) {
         throw new AppError(404, 'restaurant_not_found', 'Restaurant is no longer available');
@@ -81,7 +83,9 @@ export class CollaborationService {
   async setCartItem(code, { userId, itemId, restaurantId, quantity, customization, operationId }) {
     return this.#idempotent(operationId, async () => {
       const snapshot = await this.#requireOpenMember(code, userId);
-      const menu = await this.menuService.getRestaurantMenu(restaurantId);
+      const menu = await this.menuService.getRestaurantMenu(restaurantId, {
+        userId: snapshot.room.hostUserId
+      });
       const canonicalItem = menu.find((item) => item.id === itemId);
       if (!canonicalItem) {
         throw new AppError(404, 'menu_item_not_found', 'Menu item is no longer available');

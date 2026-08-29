@@ -51,6 +51,26 @@ flutter run -d emulator-5554
 
 The emulator uses `http://10.0.2.2:4000`; `localhost` inside Android is the emulator itself.
 
+## Browser Walkthrough
+
+The same app can run as a Flutter web target for a fast demo or UI recording:
+
+Terminal 1:
+
+```powershell
+cd D:\homie\apps\api
+npm run dev:memory
+```
+
+Terminal 2:
+
+```powershell
+cd D:\homie\apps\mobile
+flutter run -d chrome --web-port 5100
+```
+
+Open `http://127.0.0.1:5100`. Browser and Android use the same API contracts; only the default API origin changes (`127.0.0.1:4000` for web, `10.0.2.2:4000` for an Android emulator).
+
 ## Demo Flow
 
 1. Enter a name to create a persisted local guest.
@@ -92,16 +112,27 @@ flutter install -d emulator-5554 --use-application-binary=build\app\outputs\flut
 
 ## Swiggy MCP Modes
 
-`mock` is the honest default because Food MCP requires OAuth 2.1 with PKCE and issued access. Once Swiggy provides a development/staging token, set these only in `apps/api/.env`:
+`mock` is the default for the collaboration demo. With the live activation email, set these only in `apps/api/.env`:
 
 ```text
 SWIGGY_MCP_MODE=live
 SWIGGY_MCP_FOOD_URL=https://mcp.swiggy.com/food
-SWIGGY_TOKEN=<secret>
-SWIGGY_ADDRESS_ID=<saved address returned by get_addresses>
+SWIGGY_OAUTH_CALLBACK=https://api.humanslop.in/auth/callback
+SWIGGY_OAUTH_CLIENT_ID=<optional registered client id>
+SWIGGY_OAUTH_CLIENT_NAME=Homie
+SWIGGY_OAUTH_SCOPE=mcp:tools
 ```
 
-Restart Node. Raw `/api/mcp/food` calls and live discovery can be validated without changing Flutter. The typed checkout path fails closed until Swiggy cart variants/add-ons and `get_food_cart` reconciliation are implemented.
+Restart Node. In the Android app, create a local Homie guest, tap `Connect Swiggy`, complete the Swiggy phone + OTP flow in the browser, return to Homie, and select a saved delivery address. Restaurant and menu reads then come from live Food MCP. The typed checkout path fails closed until Swiggy cart variants/add-ons and `get_food_cart` reconciliation are implemented.
+
+The allowlisted callback is an exact-match HTTPS URL. DNS must route `api.humanslop.in` to the Node service and that service must expose `/auth/callback` at the domain root. For laptop-only testing, use an approved HTTPS tunnel or host the API; changing a local hosts file does not make the callback reachable from Swiggy.
+
+For a harmless API check after connecting:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:4000/api/auth/swiggy/status?userId=<homie-user-id>"
+Invoke-RestMethod "http://127.0.0.1:4000/api/mcp/addresses?userId=<homie-user-id>"
+```
 
 ## Troubleshooting
 

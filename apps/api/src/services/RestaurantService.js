@@ -3,7 +3,7 @@ export class RestaurantService {
     this.mcpService = mcpService;
   }
 
-  list(filters) {
+  list(filters = {}) {
     return this.mcpService.getRestaurants(filters);
   }
 }

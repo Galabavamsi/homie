@@ -40,6 +40,74 @@ class HomeScreen extends ConsumerWidget {
               onDismiss: controller.dismissError,
             ),
           ],
+          if (state.mcpSource.endsWith('live') && !state.swiggyConnected) ...[
+            const SizedBox(height: 16),
+            GlassPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(title: 'Connect Swiggy'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Sign in with your Swiggy phone number and OTP to load live restaurant data for this room.',
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: state.isBusy
+                        ? null
+                        : () => controller.connectSwiggy(),
+                    icon: state.isBusy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.open_in_browser_rounded),
+                    label: const Text('Connect Swiggy'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (state.mcpSource.endsWith('live') &&
+              state.swiggyConnected &&
+              state.addresses.isNotEmpty &&
+              state.selectedAddressId == null) ...[
+            const SizedBox(height: 16),
+            GlassPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(title: 'Choose delivery address'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Swiggy uses this saved address for restaurant availability and delivery charges.',
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.location_on_rounded),
+                      labelText: 'Saved Swiggy address',
+                    ),
+                    items: [
+                      for (final address in state.addresses)
+                        DropdownMenuItem(
+                          value: address.id,
+                          child: Text(
+                            '${address.label}: ${address.displayText}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: state.isBusy
+                        ? null
+                        : (value) {
+                            if (value != null) controller.selectAddress(value);
+                          },
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 26),
           GlassPanel(
             child: Column(

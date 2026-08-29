@@ -24,6 +24,24 @@ class HomieApi {
 
   Future<Map<String, dynamic>> health() => _get('/health');
 
+  Future<Map<String, dynamic>> swiggyAuthStart(String userId) =>
+      _get('/auth/swiggy/start', {'userId': userId});
+
+  Future<Map<String, dynamic>> swiggyAuthStatus(String userId) =>
+      _get('/auth/swiggy/status', {'userId': userId});
+
+  Future<Map<String, dynamic>> addresses(String userId) =>
+      _get('/mcp/addresses', {'userId': userId});
+
+  Future<Map<String, dynamic>> selectAddress({
+    required String userId,
+    required String addressId,
+  }) =>
+      _post('/mcp/addresses/select', {
+        'userId': userId,
+        'addressId': addressId,
+      });
+
   Future<Map<String, dynamic>> createGuest(String name) =>
       _post('/users/guest', {'name': name});
 
@@ -45,16 +63,30 @@ class HomieApi {
       _post(
           '/rooms/$code/join', {'userId': userId, 'operationId': operationId});
 
-  Future<Map<String, dynamic>> restaurants({String? query, String? tag}) {
+  Future<Map<String, dynamic>> restaurants({
+    String? query,
+    String? tag,
+    String? userId,
+    String? addressId,
+  }) {
     final parameters = <String, String>{
       if (query != null && query.isNotEmpty) 'q': query,
       if (tag != null && tag.isNotEmpty) 'tag': tag,
+      if (userId != null && userId.isNotEmpty) 'userId': userId,
+      if (addressId != null && addressId.isNotEmpty) 'addressId': addressId,
     };
     return _get('/mcp/restaurants', parameters);
   }
 
-  Future<Map<String, dynamic>> menu(String restaurantId) =>
-      _get('/mcp/menu/$restaurantId');
+  Future<Map<String, dynamic>> menu(
+    String restaurantId, {
+    String? userId,
+    String? addressId,
+  }) =>
+      _get('/mcp/menu/$restaurantId', {
+        if (userId != null && userId.isNotEmpty) 'userId': userId,
+        if (addressId != null && addressId.isNotEmpty) 'addressId': addressId,
+      });
 
   Future<Map<String, dynamic>> sendMessage(
     String code,

@@ -3,7 +3,7 @@ export class MenuService {
     this.mcpService = mcpService;
   }
 
-  getRestaurantMenu(restaurantId) {
-    return this.mcpService.getMenu(restaurantId);
+  getRestaurantMenu(restaurantId, context = {}) {
+    return this.mcpService.getMenu(restaurantId, context);
   }
 }

@@ -23,7 +23,17 @@ Errors use one envelope:
 GET /health
 GET /ready
 GET /auth/swiggy
-GET /auth/callback
+GET /auth/swiggy/start?userId=:userId
+GET /auth/swiggy/status?userId=:userId
+POST /auth/swiggy/logout
+
+The OAuth callback is intentionally outside the `/api` prefix so the exact allowlisted URI is supported:
+
+```http
+GET https://api.humanslop.in/auth/callback?code=...&state=...
+```
+
+`GET /auth/swiggy/start` performs Dynamic Client Registration when `SWIGGY_OAUTH_CLIENT_ID` is not set, creates a fresh PKCE verifier/state pair, and returns an authorization URL. Tokens remain in the API process and are never returned to the mobile client.
 ```
 
 `/health` reports active persistence and MCP modes. `/ready` verifies the repository connection.
@@ -89,7 +99,10 @@ Every retryable mutation accepts `operationId`. Reusing it returns the original 
 
 ```http
 GET  /mcp/restaurants?q=pizza&tag=veg
-GET  /mcp/menu/:restaurantId
+GET  /mcp/restaurants?userId=:userId&addressId=:addressId
+GET  /mcp/addresses?userId=:userId
+POST /mcp/addresses/select
+GET  /mcp/menu/:restaurantId?userId=:userId&addressId=:addressId
 POST /mcp/food
 POST /demo/food-agent
 ```
@@ -108,7 +121,7 @@ POST /demo/food-agent
 }
 ```
 
-In `SWIGGY_MCP_MODE=live`, the adapter calls `https://mcp.swiggy.com/food` with a server-side bearer token. Local mode returns deterministic fixtures.
+In `SWIGGY_MCP_MODE=live`, the adapter calls `https://mcp.swiggy.com/food` with the server-side OAuth token for the connected Homie user. Live discovery requires a real `addressId` returned by `get_addresses`; no placeholder address is accepted. Local mode returns deterministic fixtures.
 
 ## Socket.IO
 

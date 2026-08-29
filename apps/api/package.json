@@ -13,7 +13,7 @@
     "db:down": "docker compose -f ../../compose.yaml down",
     "demo:food": "node scripts/demo-food-flow.js",
     "record:demo": "node scripts/record-ui-demo.js",
-    "lint": "node --check src/server.js && node --check src/routes/index.js && node --check src/services/CollaborationService.js && node --check src/data/PostgresCollaborationRepository.js && node --check scripts/record-ui-demo.js"
+    "lint": "node --check src/server.js && node --check src/routes/index.js && node --check src/routes/auth.js && node --check src/services/CollaborationService.js && node --check src/services/McpService.js && node --check src/services/SwiggyOAuthService.js && node --check src/data/PostgresCollaborationRepository.js && node --check scripts/record-ui-demo.js"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

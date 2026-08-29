@@ -9,8 +9,11 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL,
   redisUrl: process.env.REDIS_URL,
   homiePublicUrl: process.env.HOMIE_PUBLIC_URL || 'https://homie.humanslop.in',
-  swiggyMcpBaseUrl: process.env.SWIGGY_MCP_BASE_URL || 'https://mcp.swiggy.example',
+  swiggyMcpBaseUrl: process.env.SWIGGY_MCP_BASE_URL || 'https://mcp.swiggy.com',
   swiggyMcpFoodUrl: process.env.SWIGGY_MCP_FOOD_URL || 'https://mcp.swiggy.com/food',
   swiggyMcpMode: process.env.SWIGGY_MCP_MODE || 'mock',
   swiggyOAuthCallback: process.env.SWIGGY_OAUTH_CALLBACK || 'https://api.humanslop.in/auth/callback',
+  swiggyOAuthClientId: process.env.SWIGGY_OAUTH_CLIENT_ID,
+  swiggyOAuthClientName: process.env.SWIGGY_OAUTH_CLIENT_NAME || 'Homie',
+  swiggyOAuthScope: process.env.SWIGGY_OAUTH_SCOPE || 'mcp:tools',
 };

@@ -32,25 +32,77 @@ export function createRouter(services) {
   router.get('/auth/swiggy', (_req, res) => {
     res.json({
       provider: 'swiggy',
-      type: 'oauth_2_1_pkce_pending_credentials',
+      type: 'oauth_2_1_pkce',
       redirectUri: env.swiggyOAuthCallback,
       documentation: 'https://mcp.swiggy.com/builders/docs/start/authenticate/'
     });
   });
 
-  router.get('/auth/callback', (req, res) => {
-    res.json({
-      ok: true,
-      message: 'OAuth callback route is reachable; token exchange activates after Swiggy issues client access.',
-      hasCode: typeof req.query.code === 'string'
-    });
+  router.get('/auth/swiggy/start', async (req, res, next) => {
+    try {
+      const userId = z.string().min(1).max(100).parse(req.query.userId);
+      res.json({
+        provider: 'swiggy',
+        ...(await services.swiggyOAuthService.begin({ userId }))
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/mcp/addresses', async (req, res, next) => {
+    try {
+      const userId = z.string().min(1).max(100).parse(req.query.userId);
+      const result = await services.mcpService.getAddresses({ userId });
+      res.json({
+        data: result.addresses || result.data?.addresses || [],
+        source: `swiggy_mcp_${env.swiggyMcpMode}`
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/mcp/addresses/select', async (req, res, next) => {
+    try {
+      const body = z.object({
+        userId: z.string().min(1).max(100),
+        addressId: z.string().trim().min(1).max(200)
+      }).parse(req.body);
+      res.json(await services.mcpService.selectAddress(body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/auth/swiggy/status', (req, res, next) => {
+    try {
+      const userId = z.string().min(1).max(100).parse(req.query.userId);
+      res.json(services.swiggyOAuthService.status(userId));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/auth/swiggy/logout', async (req, res, next) => {
+    try {
+      const userId = z.string().min(1).max(100).parse(req.body?.userId);
+      await services.swiggyOAuthService.logout(userId);
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get('/mcp/restaurants', async (req, res, next) => {
     try {
+      const userId = req.query.userId ? z.string().min(1).max(100).parse(req.query.userId) : undefined;
+      const addressId = req.query.addressId ? z.string().min(1).max(200).parse(req.query.addressId) : undefined;
       const restaurants = await services.restaurantService.list({
         query: req.query.q,
-        tag: req.query.tag
+        tag: req.query.tag,
+        userId,
+        addressId
       });
       res.json({ data: restaurants, source: `swiggy_mcp_${env.swiggyMcpMode}` });
     } catch (error) {
@@ -60,7 +112,9 @@ export function createRouter(services) {
 
   router.get('/mcp/menu/:restaurantId', async (req, res, next) => {
     try {
-      const menu = await services.menuService.getRestaurantMenu(req.params.restaurantId);
+      const userId = req.query.userId ? z.string().min(1).max(100).parse(req.query.userId) : undefined;
+      const addressId = req.query.addressId ? z.string().min(1).max(200).parse(req.query.addressId) : undefined;
+      const menu = await services.menuService.getRestaurantMenu(req.params.restaurantId, { userId, addressId });
       if (menu.length === 0) return res.status(404).json({ error: { code: 'menu_not_found', message: 'Menu not found' } });
       res.json({ data: menu, source: `swiggy_mcp_${env.swiggyMcpMode}` });
     } catch (error) {
@@ -83,7 +137,10 @@ export function createRouter(services) {
       const data = await services.mcpService.callFoodTool(
         body.params.name,
         body.params.arguments,
-        { authorization: req.headers.authorization }
+        {
+          authorization: req.headers.authorization,
+          userId: req.headers['x-homie-user-id']
+        }
       );
       res.json({
         jsonrpc: '2.0',

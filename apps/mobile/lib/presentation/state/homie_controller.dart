@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/mock_data.dart';
 import '../../data/network/homie_api.dart';
@@ -71,11 +72,51 @@ class HomieController extends StateNotifier<HomieState> {
     try {
       final user = await _repository.restoreUser();
       final source = await _repository.healthSource();
-      final restaurantResult = await _repository.restaurants();
+      final live = source.endsWith('live');
+      final connected = live && user != null
+          ? await _repository.swiggyConnected(user.id)
+          : false;
+      if (live && (user == null || !connected)) {
+        if (!mounted) return;
+        state = state.copyWith(
+          currentUser: user ?? state.currentUser,
+          hasSession: user != null,
+          swiggyConnected: connected,
+          mcpSource: source,
+          restaurants: const [],
+          menu: const [],
+          selectedRestaurantId: '',
+          isLoading: false,
+        );
+        return;
+      }
+      if (live) {
+        final addresses = await _repository.addresses(user!.id);
+        if (!mounted) return;
+        state = state.copyWith(
+          currentUser: user,
+          hasSession: true,
+          swiggyConnected: true,
+          addresses: addresses,
+          mcpSource: source,
+        );
+        if (addresses.isEmpty || state.selectedAddressId == null) {
+          state = state.copyWith(isLoading: false);
+          return;
+        }
+      }
+      final restaurantResult = await _repository.restaurants(
+        userId: live ? user!.id : null,
+        addressId: live ? state.selectedAddressId : null,
+      );
       final restaurants = restaurantResult.restaurants;
       final menu = restaurants.isEmpty
           ? <MenuItem>[]
-          : await _repository.menu(restaurants.first.id);
+          : await _repository.menu(
+              restaurants.first.id,
+              userId: live ? user!.id : null,
+              addressId: live ? state.selectedAddressId : null,
+            );
       if (!mounted) return;
       state = state.copyWith(
         currentUser: user,
@@ -85,6 +126,7 @@ class HomieController extends StateNotifier<HomieState> {
         selectedRestaurantId: restaurants.isEmpty ? null : restaurants.first.id,
         mcpSource: source,
         isLoading: false,
+        swiggyConnected: connected,
       );
     } on Object catch (error) {
       if (!mounted) return;
@@ -117,6 +159,67 @@ class HomieController extends StateNotifier<HomieState> {
     }
     return true;
   }
+
+  Future<bool> connectSwiggy() => _run(() async {
+        if (!state.hasSession) {
+          throw const ApiException('session_required', 'Enter Homie before connecting Swiggy');
+        }
+        final authorizationUrl = await _repository.swiggyAuthUrl(state.currentUser.id);
+        final opened = await launchUrl(
+          authorizationUrl,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!opened) {
+          throw const ApiException('browser_unavailable', 'Could not open the Swiggy sign-in page');
+        }
+
+        final deadline = DateTime.now().add(const Duration(minutes: 2));
+        while (DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (await _repository.swiggyConnected(state.currentUser.id)) {
+            if (!mounted) return;
+            state = state.copyWith(swiggyConnected: true, clearError: true);
+            await _loadLiveAddresses();
+            return;
+          }
+        }
+        throw const ApiException(
+          'oauth_pending',
+          'Finish Swiggy sign-in in the browser, then tap Connect Swiggy again.',
+        );
+      });
+
+  Future<void> _loadLiveAddresses() async {
+    final addresses = await _repository.addresses(state.currentUser.id);
+    if (!mounted) return;
+    state = state.copyWith(addresses: addresses);
+    if (addresses.isEmpty) {
+      throw const ApiException(
+        'swiggy_address_missing',
+        'Add a saved delivery address in Swiggy before browsing food.',
+      );
+    }
+  }
+
+  Future<bool> selectAddress(String addressId) => _run(() async {
+        await _repository.selectAddress(
+          userId: state.currentUser.id,
+          addressId: addressId,
+        );
+        final result = await _repository.restaurants(
+          userId: state.currentUser.id,
+          addressId: addressId,
+        );
+        state = state.copyWith(
+          selectedAddressId: addressId,
+          restaurants: result.restaurants,
+          mcpSource: result.source,
+          selectedRestaurantId:
+              result.restaurants.isEmpty ? '' : result.restaurants.first.id,
+          menu: const [],
+        );
+        await _ensureSelectedMenu();
+      });
 
   Future<bool> createRoom(String name, int budget) {
     if (name.trim().length < 2) {
@@ -164,7 +267,12 @@ class HomieController extends StateNotifier<HomieState> {
   Future<void> _loadRestaurants({String? query, DietaryTag? filter}) async {
     try {
       final result =
-          await _repository.restaurants(query: query, filter: filter);
+          await _repository.restaurants(
+            query: query,
+            filter: filter,
+            userId: state.hasSession ? state.currentUser.id : null,
+            addressId: state.selectedAddressId,
+          );
       if (!mounted) return;
       if (result.restaurants.isEmpty) {
         state =
@@ -178,7 +286,7 @@ class HomieController extends StateNotifier<HomieState> {
         restaurants: result.restaurants,
         selectedRestaurantId: selectedStillVisible
             ? state.selectedRestaurantId
-            : result.restaurants.first.id,
+            : (result.restaurants.isEmpty ? '' : result.restaurants.first.id),
         mcpSource: result.source,
         clearError: true,
       );
@@ -194,10 +302,15 @@ class HomieController extends StateNotifier<HomieState> {
   }
 
   Future<void> _ensureSelectedMenu() async {
+    if (state.selectedRestaurantId.isEmpty) return;
     if (state.menu
         .any((item) => item.restaurantId == state.selectedRestaurantId)) return;
     try {
-      final fetched = await _repository.menu(state.selectedRestaurantId);
+      final fetched = await _repository.menu(
+        state.selectedRestaurantId,
+        userId: state.hasSession ? state.currentUser.id : null,
+        addressId: state.selectedAddressId,
+      );
       if (!mounted) return;
       final retained = state.menu
           .where((item) => item.restaurantId != state.selectedRestaurantId)
@@ -278,7 +391,7 @@ class HomieController extends StateNotifier<HomieState> {
     final selected = cartRestaurant ??
         (state.restaurants.any((item) => item.id == state.selectedRestaurantId)
             ? state.selectedRestaurantId
-            : state.restaurants.first.id);
+            : (state.restaurants.isEmpty ? '' : state.restaurants.first.id));
     state = state.copyWith(
       room: snapshot.room,
       votes: snapshot.votes,
